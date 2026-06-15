@@ -53,12 +53,20 @@ Created project `isea-hack-week-2026` in Google Cloud Console.
 
 ### Environment
 
-```
-OPENAI_API_KEY=...
-SHARED_DRIVE_ID=...
-```
+Create a `.env` file at the project root (gitignored — never commit this file):
 
-Both stored in `.env` (gitignored). `SHARED_DRIVE_ID` is the long alphanumeric ID in the Shared Drive URL.
+```
+# OpenAI — used for embeddings (text-embedding-3-small) and generation (gpt-4o-mini)
+OPENAI_API_KEY=sk-...
+
+# Google Drive — the alphanumeric ID found in the Shared Drive URL
+# e.g. https://drive.google.com/drive/folders/0AJ4BSBWExhFtUk9PVA
+SHARED_DRIVE_ID=...
+
+# Optional — path to the service account JSON key file
+# Defaults to auto-discovery from secrets/*.json if not set
+GOOGLE_SERVICE_ACCOUNT_KEY=secrets/isea-hack-week-2026-fa3075fef9ee.json
+```
 
 ---
 

@@ -308,9 +308,10 @@ streamlit>=1.35.0
 
 ## Reference
 
-This pipeline follows the architecture established in `refactored-enigma` (https://github.com/kevinverhoff/refactored-enigma), adapted for:
+This pipeline follows the architecture established in [`refactored-enigma`](https://github.com/kevinverhoff/refactored-enigma), adapted for:
 - OpenAI models throughout (vs. Gemini)
 - Google Drive as source (vs. web scraping)
 - Header-aware chunking (vs. character-only splitting)
 - Contextual chunk prefixes using Drive folder paths and document structure
 - Folder path as a filterable metadata dimension (vs. year/author/doc_type)
+

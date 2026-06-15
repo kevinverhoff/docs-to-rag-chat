@@ -23,10 +23,21 @@ Step 6 │ Vector Store       Index all fingerprints for fast similarity search
 Step 7 │ RAG Pipeline       Answer a question: find relevant chunks → generate a response
 Step 8 │ Agent + Tools      Smarter assistant that can search, compare, summarize, and cite
 Step 9 │ Chat Interface     Staff-facing UI for asking questions
-
-Steps 1-6 are pre-processing steps that we should only have to work through once. Steps 7-9 are the actual tools that Impact Florida Staff will interact with via the chat interface.
-
 ```
+
+Steps 1–6 run once to build the knowledge base. Steps 7–9 are what Impact Florida staff interact with.
+
+| Step | Component | Status |
+|------|-----------|--------|
+| 1 | Drive Explorer | 🔄 Built — awaiting Shared Drive access |
+| 2 | Document Fetcher | ⬜ Not started |
+| 3 | Text Extractor | ⬜ Not started |
+| 4 | Chunker | ⬜ Not started |
+| 5 | Embedder | ⬜ Not started |
+| 6 | Vector Store | ⬜ Not started |
+| 7 | RAG Pipeline | ⬜ Not started |
+| 8 | Agent + Tools | ⬜ Not started |
+| 9 | Chat Interface | ⬜ Not started |
 
 ---
 
@@ -80,7 +91,7 @@ GOOGLE_SERVICE_ACCOUNT_KEY=secrets/isea-hack-week-2026-fa3075fef9ee.json
 
 ---
 
-### Step 1: Drive Explorer (`explore_drive.py`)
+### Step 1: Drive Explorer (`explore_drive.py`) — 🔄 Built, awaiting Drive access
 
 **Purpose:** Understand what is in the Shared Drive before ingesting anything.
 
@@ -98,7 +109,7 @@ Connects to the Google Drive API using the service account, walks the entire fol
 
 ---
 
-### Step 2: Document Fetcher (`pipeline/get_docs.py`)
+### Step 2: Document Fetcher (`pipeline/get_docs.py`) — ⬜ Not started
 
 **Purpose:** Download every document and record its full context — not just its name, but where it lives in the Drive hierarchy.
 
@@ -129,7 +140,7 @@ For each file in the Shared Drive:
 
 ---
 
-### Step 3: Text Extractor (`pipeline/ingest.py`)
+### Step 3: Text Extractor (`pipeline/ingest.py`) — ⬜ Not started
 
 **Purpose:** Pull clean, readable text from each downloaded file.
 
@@ -148,7 +159,7 @@ Different file types require different extraction strategies:
 
 ---
 
-### Step 4: Chunker (`pipeline/build_vectorstore.py`)
+### Step 4: Chunker (`pipeline/build_vectorstore.py`) — ⬜ Not started
 
 **Purpose:** Break each document into pieces small enough for semantic search, while preserving enough context for useful answers.
 
@@ -191,7 +202,7 @@ This prefix is embedded with the chunk text so the fingerprint captures not just
 
 ---
 
-### Step 5 & 6: Embedder + Vector Store (`pipeline/build_vectorstore.py`, cont.)
+### Step 5 & 6: Embedder + Vector Store (`pipeline/build_vectorstore.py`, cont.) — ⬜ Not started
 
 **Purpose:** Convert each chunk into a numerical fingerprint and store it in a fast, searchable index.
 
@@ -212,7 +223,7 @@ This prefix is embedded with the chunk text so the fingerprint captures not just
 
 ---
 
-### Step 7: RAG Pipeline (`rag_pipeline.py`)
+### Step 7: RAG Pipeline (`rag_pipeline.py`) — ⬜ Not started
 
 **Purpose:** Given a plain-language question, find the most relevant document chunks and generate a grounded, cited answer.
 
@@ -231,7 +242,7 @@ This prefix is embedded with the chunk text so the fingerprint captures not just
 
 ---
 
-### Step 8: Agent + Tools (`agent.py`, `tools.py`)
+### Step 8: Agent + Tools (`agent.py`, `tools.py`) — ⬜ Not started
 
 **Purpose:** A smarter assistant that can decide which kind of search to run, then synthesize across multiple results.
 
@@ -254,7 +265,7 @@ Rather than always doing the same retrieve-and-answer loop, the agent selects fr
 
 ---
 
-### Step 9: Chat Interface (`app.py`)
+### Step 9: Chat Interface (`app.py`) — ⬜ Not started
 
 **Purpose:** A simple web interface for staff to ask questions and get cited answers.
 

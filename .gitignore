@@ -1,2 +1,26 @@
+﻿# Secrets and credentials
 .env
-secrets/**/*
+secrets/
+
+# Downloaded documents (large, regenerable)
+data/
+
+# Generated pipeline artifacts
+metadata.json
+documents.parquet
+themes_raw.parquet
+themes.parquet
+theme_map.json
+
+# Vector store (regenerable)
+chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Logs
+*.log

@@ -1,5 +1,5 @@
 """
-Feedback collection and Google Sheets writing for the Impact Florida Research Assistant.
+Feedback collection and Google Sheets writing for the document research assistant.
 
 Rubric dimensions (each scored 1-4):
   Answer Relevance       15%
@@ -29,9 +29,9 @@ from google.oauth2.service_account import Credentials
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).parent.parent
-_CREDS_PATH  = PROJECT_ROOT / "secrets" / "isea-hack-week-2026-158094ac7d8b.json"
-_SHEET_ID    = "14ck-iNUKB9t9B-K1k_Yl0GlIzO8feORXAueMuTgAhDM"
-_TAB_GID     = 2117086814  # Question Scoring tab
+_CREDS_PATH  = PROJECT_ROOT / "secrets" / "google-service-account.json"
+_SHEET_ID    = ""  # Replace with your Google Sheet ID
+_TAB_GID     = 0  # Replace with your target worksheet GID
 
 _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -44,7 +44,7 @@ DIMENSIONS: list[tuple[str, float]] = [
     ("Citation Quality",       0.20),
     ("Synthesis Quality",      0.15),
     ("Theme Validity",         0.10),
-    ("5 Conditions Alignment", 0.10),
+    ("Framework Alignment",      0.10),
     ("Usefulness",             0.05),
 ]
 

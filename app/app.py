@@ -1,5 +1,5 @@
-"""
-Step 9: Streamlit chat interface for Impact Florida documents.
+﻿"""
+Step 9: Streamlit chat interface for the document library.
 
 Run with:
   python -m streamlit run app.py
@@ -27,23 +27,23 @@ THEMES_PATH = PROJECT_ROOT / "data" / "themes.parquet"
 # ------------------------------------------------------------------
 
 _FAV_PNG = PROJECT_ROOT / "media" / "Favicon.png"
-_LTJ_PNG = PROJECT_ROOT / "media" / "LTJ Fellowship Logo Work.png"
+_LOGO_PNG = PROJECT_ROOT / "media" / "logo.png"
 
 # Use the separate favicon image for the browser tab.
-page_icon = str(_FAV_PNG) if _FAV_PNG.exists() else "📋"
+page_icon = str(_FAV_PNG) if _FAV_PNG.exists() else "🤖"
 
 st.set_page_config(
-    page_title="Impact Florida Research Assistant",
+    page_title="Your Personal Research Assistant",
     page_icon=page_icon,
     layout="wide",
 )
 
 
 def _get_logo_b64() -> str | None:
-    """Return base64-encoded bytes for the sidebar logo (use LTJ Fellowship Logo Work.png)."""
-    if _LTJ_PNG.exists():
+    """Return base64-encoded bytes for the sidebar logo (use logo.png if present)."""
+    if _LOGO_PNG.exists():
         try:
-            return base64.b64encode(_LTJ_PNG.read_bytes()).decode()
+            return base64.b64encode(_LOGO_PNG.read_bytes()).decode()
         except Exception:
             pass
     return None
@@ -153,7 +153,14 @@ def sidebar(themes_df: pd.DataFrame | None) -> dict:
                 unsafe_allow_html=True,
             )
         else:
-            st.title("Impact Florida")
+            st.markdown(
+                "<div style='text-align:center;padding:16px 0 8px 0;'>"
+                "<div style='font-size:3.5rem;line-height:1;'>&#x1F916;</div>"
+                "<div style='margin-top:10px;color:#24265b;font-size:1.1rem;"
+                "font-weight:700;letter-spacing:0.02em;'>Your Personal Research Assistant</div>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
         st.markdown(
             "<div style='margin:0;padding:0;'>"
@@ -322,7 +329,7 @@ def chat_tab(ag, filters: dict) -> None:
     #   chat_input     → sticky at bottom of viewport
     msg_container = st.container()
     warning_slot  = st.container()
-    prompt = st.chat_input("Ask about Impact Florida documents...")
+    prompt = st.chat_input("Ask a question...")
 
     # Fill warning slot — renders just above the chat input, visible without scrolling
     _active = st.session_state.get("active_filters")
@@ -609,8 +616,8 @@ def main() -> None:
     st.markdown(
         """
         <div style='margin-bottom:16px;'>
-          <div style='margin:0;color:#24265b;font-size:2rem;font-weight:700;letter-spacing:-0.02em;'>Ask the Cadre Companion</div>
-          <div style='margin:4px 0 0 0;color:#5C628F;font-size:1rem;line-height:1.4;'>Search across Impact Florida's knowledge base.</div>
+          <div style='margin:0;color:#24265b;font-size:2rem;font-weight:700;letter-spacing:-0.02em;'>🤖 Your Personal Research Assistant</div>
+          <div style='margin:4px 0 0 0;color:#5C628F;font-size:1rem;line-height:1.4;'>Search across the document library.</div>
         </div>
         """,
         unsafe_allow_html=True,

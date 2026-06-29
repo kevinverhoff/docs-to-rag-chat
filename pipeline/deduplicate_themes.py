@@ -76,7 +76,7 @@ Rules:
 
 def _map_prompt(themes: list[str]) -> str:
     return (
-        f"Below are {len(themes)} theme labels extracted from Impact Florida "
+        f"Below are {len(themes)} theme labels extracted from "
         "program documents (site visits, surveys, listening sessions, evaluation "
         "reports, district data). Group synonyms into canonical labels.\n\n"
         "THEME LABELS:\n" + "\n".join(f"- {t}" for t in themes)
@@ -115,7 +115,7 @@ Rules:
 def _cluster_prompt(canonical: list[str]) -> str:
     return (
         f"Assign each of these {len(canonical)} canonical theme labels from "
-        "Impact Florida program documents to a broad superordinate cluster. "
+        "program documents to a broad superordinate cluster. "
         "Produce 5-8 clusters total.\n\n"
         "CANONICAL LABELS:\n" + "\n".join(f"- {t}" for t in canonical)
     )

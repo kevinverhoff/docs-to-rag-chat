@@ -30,7 +30,7 @@ load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 
 CHROMA_PATH = PROJECT_ROOT / "data" / "chroma_db"
 THEMES_PATH = PROJECT_ROOT / "data" / "themes.parquet"
-COLLECTION  = "impact_florida_docs"
+COLLECTION  = "docs"
 EMBED_MODEL = "text-embedding-3-small"
 CHAT_MODEL  = "gpt-4o-mini"
 TEMPERATURE = 0.1
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Ask a question against the Impact Florida document library.",
+        description="Ask a question against the document library.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
   python rag_pipeline.py "What challenges have districts reported with SWS?"

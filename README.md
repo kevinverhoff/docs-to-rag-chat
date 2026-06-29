@@ -1,10 +1,10 @@
-# Impact Florida RAG Pipeline
+# Docs-to-RAG-Chat
 
 <div align="center">
-  <img src="media/LTJ%20Fellowship%20Logo%20Work.png" alt="LTJ Fellowship Logo" width="480">
+  <!-- Add your logo here: <img src="media/logo.png" alt="Logo" width="480"> -->
 </div>
 
-Research assistant for Impact Florida program documents stored in Google Drive.
+Research assistant for program documents stored in Google Drive.
 Staff ask plain-language questions and get cited, grounded answers drawn directly
 from the document library. Nothing is made up; every answer traces back to a
 specific document.
@@ -59,7 +59,7 @@ text extraction to build the themes layer. Steps 7-9 are what staff interact wit
 
 ```bash
 git clone <repo-url>
-cd team-impact-fl
+cd docs-to-rag-chat
 pip install -r requirements.txt
 ```
 
@@ -569,7 +569,7 @@ CRITICAL RULES
 1. Every factual claim must come directly from a tool result. Never answer from memory.
 2. Never invent, guess, or paraphrase content that was not in a tool result.
 3. If tools return no relevant results, say: "I could not find information about that
-   in the Impact Florida documents." Do not fill in from general knowledge.
+   in the provided documents." Do not fill in from general knowledge.
 4. Never fabricate citations. Only use the ([filename](url)) links returned verbatim
    by a tool. Never write a filename or URL you invented.
 5. Never wrap text from answer() or summarize() in quotation marks — those tools

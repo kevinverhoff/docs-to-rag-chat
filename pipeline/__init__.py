@@ -180,7 +180,7 @@ def main(override: bool = False, keep_raw: bool = False, stream: bool = False) -
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Run the Impact Florida ingestion pipeline.",
+        description="Run the document ingestion pipeline.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python pipeline/__init__.py                         # run / resume

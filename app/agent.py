@@ -1,5 +1,5 @@
 """
-Step 8: ReAct agent for Impact Florida documents.
+Step 8: ReAct agent for document library.
 
 Uses a custom LangGraph graph that forces tool_choice="required" on the first
 model call, so the agent cannot skip tools and answer from training memory.
@@ -87,7 +87,7 @@ def _build_graph(model: ChatOpenAI, tools: list):
 
 class Agent:
     """
-    ReAct agent over the Impact Florida document library.
+    ReAct agent over the document library.
     Initialize once and share across conversations (@st.cache_resource).
     """
 
@@ -204,7 +204,7 @@ def _history_to_messages(history: list[dict] | None) -> list:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Chat with the Impact Florida agent.",
+        description="Chat with the document agent.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python agent.py "What coaching challenges have districts reported?"

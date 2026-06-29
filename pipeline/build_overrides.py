@@ -1,4 +1,4 @@
-"""
+﻿"""
 Compile doc_type_overrides.json from the audit exceptions list.
 Maps file_id -> new doc_type for all manually reviewed classification decisions.
 
@@ -22,7 +22,6 @@ EXCEPTIONS = [
     ("24-25 Solving with Students - Coaching Call Log", "engagement_notes"),
     ("24-25 NEW SWS Application Acceptance", "program_logistics"),
     ("23-24 SWS Y3 Alumni Information", "program_logistics"),
-    ("22-23 Impact Florida - Elevate OFFICIAL Teacher Cadre", "program_logistics"),
     ("EMAILS of 25-26 Solving with Students", "program_logistics"),
     ("23-24 Solving with Students - Year 3 Tracker", "program_logistics"),
     # site_visit audit
@@ -111,7 +110,6 @@ EXCEPTIONS = [
     # focus_group audit
     ("SWS District Leader Focus Group Summary", "qualitative_theming"),
     # null doc assignments
-    ("Impact Florida_2026 ISEA Hackweek Guide", "impact_data_report"),
     ("EIR Mid-Phase Q2 Performance Report", "grants_and_funder_reporting"),
     ("TW_Outcomes Survey Context_2025", "progress_summary"),
     ("TW_Cross-District Data Slide Deck_2025", "other_data_file"),
@@ -122,13 +120,10 @@ EXCEPTIONS = [
     ("EIR/Game-Based Learning_Running Biweekly Call Notes", "engagement_notes"),
     ("EIR Mid-Phase Annual Performance Report 1_2024", "impact_data_report"),
     ("EIR/Game-Based Learning Results Tracker", "program_logistics"),
-    ("Investing in Impact Florida Gates Results Tracker", "grants_and_funder_reporting"),
     ("Weekly SPARK Meeting Notes", "engagement_notes"),
     ("SWS_Historical Account of Cadre", "progress_summary"),
     ("SWS_Monthly Funder Check-In Call Notes", "grants_and_funder_reporting"),
     ("Focus K-3 Math Cadre_Monthly Progress Summaries", "progress_summary"),
-    ("UW Sponsor Agreement Template ISEA", "grants_and_funder_reporting"),
-    ("Impact Florida Sponsor Application_ ISEA 2026", "grants_and_funder_reporting"),
     # district_data audit
     ("Focus K-3_Teacher and Leader Perceptions", "progress_summary"),
     ("Focus K-3_Teacher and Leader Perspectives on Instructional", "progress_summary"),

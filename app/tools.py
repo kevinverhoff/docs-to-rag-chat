@@ -1,5 +1,5 @@
 """
-Step 8: Tool definitions for the Impact Florida agent.
+Step 8: Tool definitions for the document agent.
 
 Tools are created via make_tools(pipeline, themes_df) which returns a list
 of LangChain tools with the pipeline and themes dataframe in closure scope.

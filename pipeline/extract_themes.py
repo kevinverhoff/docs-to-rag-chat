@@ -49,11 +49,7 @@ CARRY_COLS = [
 ]
 
 SYSTEM_PROMPT = """\
-You analyze documents from Impact Florida, an education nonprofit that supports
-K-12 programs across Florida school districts. Programs include: SWS (Solving
-With Students), Focus K-3, Math Materials, Teacher Workforce, EIR/Game-Based
-Learning, SPARK, and NAT HQIM. Documents include site visit notes, survey
-reflections, listening session summaries, evaluation reports, and district data.
+You analyze program documents from an organization's document library. Documents may include site visit notes, survey reflections, listening session summaries, evaluation reports, and other program data.
 
 Your job is to extract structured information from each document. Return ONLY
 a valid JSON object -- no markdown, no explanation, just JSON.\

@@ -1,5 +1,5 @@
 """
-Fetch the Impact Florida ISEA Hackweek Guide from the Background folder
+Fetch a guide document from the Drive folder
 and append its full text to drive_structure.txt as context.
 """
 
@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 OUTPUT_FILE = PROJECT_ROOT / "data" / "drive_structure.txt"
-GUIDE_NAME_FRAGMENT = "ISEA Hackweek Guide"
+GUIDE_NAME_FRAGMENT = "Program Guide"  # Set to a filename fragment of your guide document
 
 
 def find_key_file() -> str:
@@ -116,7 +116,7 @@ def main():
     divider = "=" * 60
     section = (
         f"\n\n{divider}\n"
-        f"IMPACT FLORIDA PROGRAM GUIDE\n"
+        f"PROGRAM GUIDE\n"
         f"Source: {guide['name']}\n"
         f"{divider}\n\n"
         f"{text.strip()}\n"

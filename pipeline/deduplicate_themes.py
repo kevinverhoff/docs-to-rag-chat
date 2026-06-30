@@ -22,20 +22,26 @@ Usage:
 """
 
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 PROJECT_ROOT       = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+from providers import build_chat_model
+
 THEMES_RAW_PATH    = PROJECT_ROOT / "data" / "themes_raw.parquet"
 THEME_MAP_PATH     = PROJECT_ROOT / "data" / "theme_map.json"
 THEME_CLUSTERS_PATH = PROJECT_ROOT / "data" / "theme_clusters.json"
 OUTPUT_PATH        = PROJECT_ROOT / "data" / "themes.parquet"
-
-MODEL = "gpt-4o-mini"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -83,17 +89,12 @@ def _map_prompt(themes: list[str]) -> str:
     )
 
 
-def generate_theme_map(client: OpenAI, themes: list[str]) -> dict[str, str]:
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": _MAP_SYSTEM},
-            {"role": "user",   "content": _map_prompt(themes)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
-    mapping: dict[str, str] = json.loads(resp.choices[0].message.content)
+def generate_theme_map(llm: BaseChatModel, themes: list[str]) -> dict[str, str]:
+    resp = llm.invoke([
+        SystemMessage(content=_MAP_SYSTEM),
+        HumanMessage(content=_map_prompt(themes)),
+    ])
+    mapping: dict[str, str] = json.loads(resp.content)
     return {t: mapping.get(t, t) for t in themes}
 
 # ---------------------------------------------------------------------------
@@ -121,17 +122,12 @@ def _cluster_prompt(canonical: list[str]) -> str:
     )
 
 
-def generate_cluster_map(client: OpenAI, canonical: list[str]) -> dict[str, str]:
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": _CLUSTER_SYSTEM},
-            {"role": "user",   "content": _cluster_prompt(canonical)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
-    mapping: dict[str, str] = json.loads(resp.choices[0].message.content)
+def generate_cluster_map(llm: BaseChatModel, canonical: list[str]) -> dict[str, str]:
+    resp = llm.invoke([
+        SystemMessage(content=_CLUSTER_SYSTEM),
+        HumanMessage(content=_cluster_prompt(canonical)),
+    ])
+    mapping: dict[str, str] = json.loads(resp.content)
     return {t: mapping.get(t, t) for t in canonical}
 
 # ---------------------------------------------------------------------------
@@ -177,7 +173,7 @@ def main() -> None:
     ok = df[df["theme_extraction_status"] == "ok"]
     print(f"Loaded {len(df)} rows ({len(ok)} with extracted themes)")
 
-    client = OpenAI()
+    llm = build_chat_model()
 
     # -- Pass 1: raw -> canonical -------------------------------------------
 
@@ -190,7 +186,7 @@ def main() -> None:
         unique_raw = _collect_unique(ok, "themes")
         print(f"Found {len(unique_raw)} unique raw theme labels")
         print("Pass 1: generating canonical mapping...")
-        theme_map = generate_theme_map(client, unique_raw)
+        theme_map = generate_theme_map(llm, unique_raw)
         with open(THEME_MAP_PATH, "w", encoding="utf-8") as f:
             json.dump(theme_map, f, indent=2, ensure_ascii=False)
         print(f"  Saved {THEME_MAP_PATH.name}")
@@ -211,7 +207,7 @@ def main() -> None:
         print(f"  {len(cluster_map)} entries")
     else:
         print("Pass 2: generating cluster mapping...")
-        cluster_map = generate_cluster_map(client, unique_canonical)
+        cluster_map = generate_cluster_map(llm, unique_canonical)
         with open(THEME_CLUSTERS_PATH, "w", encoding="utf-8") as f:
             json.dump(cluster_map, f, indent=2, ensure_ascii=False)
         print(f"  Saved {THEME_CLUSTERS_PATH.name}")

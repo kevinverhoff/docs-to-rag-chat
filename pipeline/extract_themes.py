@@ -17,21 +17,28 @@ Usage:
 """
 
 import json
+import sys
 import time
 import traceback
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+from providers import build_chat_model
+
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents.parquet"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "themes_raw.parquet"
 
-MODEL = "gpt-4o-mini"
-MAX_CHARS = 30_000   # truncate very long docs; gpt-4o-mini has 128k context
+MAX_CHARS = 30_000   # truncate very long docs
 MIN_CHARS = 100      # skip docs with too little text to extract themes from
 REQUEST_DELAY = 0.1  # seconds between API calls
 
@@ -106,18 +113,17 @@ DOCUMENT:
 {body}{truncation_note}"""
 
 
-def _call_with_retry(client: OpenAI, messages: list[dict], retries: int = 3) -> dict:
+def _call_with_retry(llm: BaseChatModel, messages: list[dict], retries: int = 3) -> dict:
+    lc_messages = [
+        SystemMessage(content=m["content"]) if m["role"] == "system"
+        else HumanMessage(content=m["content"])
+        for m in messages
+    ]
     for attempt in range(retries):
         try:
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.1,
-            )
-            return json.loads(response.choices[0].message.content)
+            response = llm.invoke(lc_messages)
+            return json.loads(response.content)
         except Exception as e:
-            # Quota exhaustion won't recover -- bail immediately
             if getattr(e, "code", None) == "insufficient_quota":
                 raise
             if attempt < retries - 1:
@@ -126,7 +132,7 @@ def _call_with_retry(client: OpenAI, messages: list[dict], retries: int = 3) -> 
             raise
 
 
-def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]:
+def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | None]:
     """
     Returns (fields_dict, status, error_message).
     status is "ok", "skipped", or "error".
@@ -145,7 +151,7 @@ def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]
     ]
 
     try:
-        result = _call_with_retry(client, messages)
+        result = _call_with_retry(llm, messages)
     except Exception:
         return {}, "error", traceback.format_exc(limit=3)
 
@@ -181,13 +187,13 @@ def main() -> None:
     to_process = df[~df["file_id"].isin(already_done)]
     print(f"Extracting themes from {len(to_process)} documents...")
 
-    client = OpenAI()
+    llm = build_chat_model()
     rows = []
     counts: dict[str, int] = {"ok": 0, "skipped": 0, "error": 0}
 
     for idx, (_, record) in enumerate(to_process.iterrows(), 1):
         rec = record.to_dict()
-        fields, status, error = extract_themes(client, rec)
+        fields, status, error = extract_themes(llm, rec)
 
         fname = rec.get("file_name", "")[:60]
         if status == "ok":

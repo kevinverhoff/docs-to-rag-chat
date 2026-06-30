@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import json
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -19,20 +20,24 @@ from pathlib import Path
 import chromadb
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+import config as _config
+from providers import build_embedder
 
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents.parquet"
 CHROMA_PATH    = PROJECT_ROOT / "data" / "chroma_db"
 THEMES_PATH    = PROJECT_ROOT / "data" / "themes.parquet"
-COLLECTION     = "impact_florida_docs"
+COLLECTION     = _config.CHROMA_COLLECTION
 
 CHUNK_SIZE    = 800
 CHUNK_OVERLAP = 100
 CHUNK_MIN     = 100
-EMBED_MODEL   = "text-embedding-3-small"
 EMBED_BATCH   = 100
 REQUEST_DELAY = 0.05  # seconds between embedding batch calls
 
@@ -186,7 +191,7 @@ def _safe(val) -> str | int | float | bool:
 
 
 def embed_and_index(
-    client: OpenAI,
+    embedder,
     collection: chromadb.Collection,
     chunks: list[dict],
     rec: dict,
@@ -195,15 +200,8 @@ def embed_and_index(
     if not chunks:
         return 0
 
-    embed_texts = [c["embed_text"] for c in chunks]
-    all_embeddings: list[list[float]] = []
-
-    for i in range(0, len(embed_texts), EMBED_BATCH):
-        batch = embed_texts[i : i + EMBED_BATCH]
-        response = client.embeddings.create(model=EMBED_MODEL, input=batch)
-        all_embeddings.extend([e.embedding for e in response.data])
-        if i + EMBED_BATCH < len(embed_texts):
-            time.sleep(REQUEST_DELAY)
+    embed_texts    = [c["embed_text"] for c in chunks]
+    all_embeddings = embedder.embed_documents(embed_texts)
 
     ids       = [f"{rec['file_id']}_chunk_{c['chunk_index']}" for c in chunks]
     documents = [c["text"] for c in chunks]
@@ -248,7 +246,7 @@ def main(rebuild: bool = False) -> None:
     parser.add_argument("--rebuild", action="store_true",
                         help="Drop and rebuild the collection from scratch")
     args, _ = parser.parse_known_args()
-    do_rebuild = rebuild or do_rebuild
+    do_rebuild = rebuild or args.rebuild
 
     if not DOCUMENTS_PATH.exists():
         raise FileNotFoundError("documents.parquet not found -- run ingest.py first")
@@ -302,7 +300,7 @@ def main(rebuild: bool = False) -> None:
         print("Nothing to do.")
         return
 
-    openai_client = OpenAI()
+    embedder     = build_embedder()
     total_chunks = 0
     errors = 0
 
@@ -317,7 +315,7 @@ def main(rebuild: bool = False) -> None:
                 print(f"  [{idx}/{len(to_process)}] SKIP (no chunks)  {label}")
                 continue
 
-            added = embed_and_index(openai_client, collection, chunks, rec)
+            added = embed_and_index(embedder, collection, chunks, rec)
             total_chunks += added
             print(f"  [{idx}/{len(to_process)}] OK  {added:>3} chunks  {label}")
 

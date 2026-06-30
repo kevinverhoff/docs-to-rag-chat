@@ -518,18 +518,15 @@ def download_file(
         return False, str(e)
 
 # ---------------------------------------------------------------------------
-# Main
+# Main fetch logic (used by main() and GoogleDriveSource)
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    drive_id = os.getenv("SHARED_DRIVE_ID")
-    if not drive_id:
-        raise EnvironmentError("SHARED_DRIVE_ID is not set in .env")
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    print("Connecting to Google Drive...")
-    service = build_drive_service()
+def fetch_all_documents(service, drive_id: str, dest_dir: Path) -> list[dict]:
+    """
+    Walk the Shared Drive, download all files into dest_dir, and return
+    a list of metadata dicts (same structure as metadata.json records).
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
     print("Fetching file list...")
     all_items = list_all_items(service, drive_id)
@@ -544,7 +541,7 @@ def main() -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     for idx, file in enumerate(files, 1):
-        file_id = file["id"]
+        file_id   = file["id"]
         file_name = file["name"]
         mime_type = file["mimeType"]
 
@@ -552,15 +549,14 @@ def main() -> None:
             counts["skipped"] += 1
             continue
 
-        parents = file.get("parents", [])
-        parent_id = parents[0] if parents else drive_id
+        parents     = file.get("parents", [])
+        parent_id   = parents[0] if parents else drive_id
         folder_path = path_map.get(parent_id, "")
+        parsed      = parse_path_metadata(folder_path, file_name)
 
-        parsed = parse_path_metadata(folder_path, file_name)
-
-        ext = _file_extension(mime_type, file_name)
-        local_path = DATA_DIR / f"{file_id}{ext}"
-        rel_path = str(local_path.relative_to(PROJECT_ROOT))
+        ext        = _file_extension(mime_type, file_name)
+        local_path = dest_dir / f"{file_id}{ext}"
+        rel_path   = str(local_path.relative_to(PROJECT_ROOT))
 
         if local_path.exists():
             status, error_msg = "exists", None
@@ -578,16 +574,16 @@ def main() -> None:
             time.sleep(DOWNLOAD_DELAY_SECONDS)
 
         metadata.append({
-            "file_id": file_id,
-            "file_name": file_name,
-            "mime_type": mime_type,
-            "folder_path": folder_path,
-            "local_path": rel_path,
-            "drive_url": file.get("webViewLink", ""),
+            "file_id":         file_id,
+            "file_name":       file_name,
+            "mime_type":       mime_type,
+            "folder_path":     folder_path,
+            "local_path":      rel_path,
+            "drive_url":       file.get("webViewLink", ""),
             **parsed,
             "download_status": status,
-            "error_message": error_msg,
-            "downloaded_at": now,
+            "error_message":   error_msg,
+            "downloaded_at":   now,
         })
 
     # Apply manual doc_type overrides from audit
@@ -601,21 +597,33 @@ def main() -> None:
                 override_count += 1
         print(f"  Applied {override_count} doc_type overrides")
 
-    # Derive file_type from mime_type; data_form is null until
-    # extract_themes.py populates it via LLM inference
     for record in metadata:
         record["file_type"] = FILE_TYPE_MAP.get(record.get("mime_type", ""), "other")
         record["data_form"] = None
 
-    METADATA_PATH.write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-
-    print(f"\nDone.")
-    print(f"  Downloaded:    {counts['downloaded']}")
+    print(f"\n  Downloaded:    {counts['downloaded']}")
     print(f"  Already exist: {counts['exists']}")
     print(f"  Skipped:       {counts['skipped']}")
     print(f"  Failed:        {counts['failed']}")
+    return metadata
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    drive_id = os.getenv("SHARED_DRIVE_ID")
+    if not drive_id:
+        raise EnvironmentError("SHARED_DRIVE_ID is not set in .env")
+
+    print("Connecting to Google Drive...")
+    service  = build_drive_service()
+    metadata = fetch_all_documents(service, drive_id, DATA_DIR)
+
+    METADATA_PATH.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     print(f"  Metadata:      {METADATA_PATH}")
 
 

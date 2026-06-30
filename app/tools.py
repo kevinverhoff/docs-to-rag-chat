@@ -18,13 +18,20 @@ Cross-dimensional tools (themes.parquet):
 """
 
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from langchain_core.messages import HumanMessage as _HumanMessage, SystemMessage as _SystemMessage
 from langchain_core.tools import tool
 
+_PROJECT_ROOT = Path(__file__).parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from providers import build_chat_model as _build_chat_model
 from rag_pipeline import RagPipeline, _build_where
 
 PROJECT_ROOT = Path(__file__).parent
@@ -48,6 +55,8 @@ def make_tools(
     Returns all agent tools with pipeline and themes_df captured in closure.
     Pass the result directly to create_react_agent().
     """
+
+    _synth_llm = _build_chat_model()
 
     # Verified file_name → drive_url mapping from themes.parquet.
     # Overrides whatever URL the vector store chunk metadata contains,
@@ -346,38 +355,25 @@ def make_tools(
         if not passages:
             return "No compare() result available. Call compare() first, then synthesize()."
 
-        from openai import OpenAI as _OpenAI
-        client  = _OpenAI()
-        noun    = dimension.replace("_", " ")
-        resp    = client.chat.completions.create(
-            model       = "gpt-4o-mini",
-            temperature = 0.1,
-            max_tokens  = 350,
-            messages    = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You write concise synthesis paragraphs from document research. "
-                        "Write 2-4 sentences identifying key similarities and differences "
-                        "across groups. Cite inline using ([filename](url)) links already "
-                        "present in the passages. Do not introduce new information. "
-                        "Do not use bullet points or headers."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Topic: {topic}\n"
-                        f"Comparing across: {noun}s\n\n"
-                        f"Retrieved passages:\n{passages}\n\n"
-                        f"Write a 2-4 sentence synthesis paragraph that leads with what "
-                        f"is consistent across {noun}s and then what differs. "
-                        f"Ground every claim in the passages above."
-                    ),
-                },
-            ],
-        )
-        return resp.choices[0].message.content.strip()
+        noun = dimension.replace("_", " ")
+        resp = _synth_llm.invoke([
+            _SystemMessage(content=(
+                "You write concise synthesis paragraphs from document research. "
+                "Write 2-4 sentences identifying key similarities and differences "
+                "across groups. Cite inline using ([filename](url)) links already "
+                "present in the passages. Do not introduce new information. "
+                "Do not use bullet points or headers."
+            )),
+            _HumanMessage(content=(
+                f"Topic: {topic}\n"
+                f"Comparing across: {noun}s\n\n"
+                f"Retrieved passages:\n{passages}\n\n"
+                f"Write a 2-4 sentence synthesis paragraph that leads with what "
+                f"is consistent across {noun}s and then what differs. "
+                f"Ground every claim in the passages above."
+            )),
+        ])
+        return resp.content.strip()
 
     # ------------------------------------------------------------------
     # Survey stats tools

@@ -16,13 +16,13 @@ Usage:
 """
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Annotated, TypedDict
 
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.errors import GraphRecursionError
@@ -32,12 +32,15 @@ from rag_pipeline import RagPipeline
 from tools import make_tools
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+from providers import build_chat_model
 
 THEMES_PATH   = PROJECT_ROOT / "data" / "themes.parquet"
 METADATA_PATH = PROJECT_ROOT / "data" / "metadata.json"
-CHAT_MODEL    = "gpt-4o-mini"
-TEMPERATURE = 0.1
 
 SYSTEM_PROMPT = (PROJECT_ROOT / "prompts" / "agent_system_prompt.txt").read_text(encoding="utf-8")
 
@@ -50,7 +53,7 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-def _build_graph(model: ChatOpenAI, tools: list):
+def _build_graph(model, tools: list):
     """
     ReAct graph with forced tool use on the first step.
     - First model call: tool_choice="required" -- cannot skip tools
@@ -109,7 +112,7 @@ class Agent:
                 metadata = _json.load(f)
 
         tools        = make_tools(pipeline, themes_df, metadata)
-        model        = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
+        model        = build_chat_model()
         self._model  = model
         self.app     = _build_graph(model, tools)
 

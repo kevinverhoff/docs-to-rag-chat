@@ -18,22 +18,26 @@ Usage:
 """
 
 import json
+import sys
 from pathlib import Path
 
 import chromadb
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+import config as _config
+from providers import build_chat_model, build_embedder
 
 CHROMA_PATH = PROJECT_ROOT / "data" / "chroma_db"
 THEMES_PATH = PROJECT_ROOT / "data" / "themes.parquet"
-COLLECTION  = "docs"
-EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL  = "gpt-4o-mini"
-TEMPERATURE = 0.1
+COLLECTION  = _config.CHROMA_COLLECTION
 
 TOP_K       = 20  # over-fetch before dedup
 MAX_PER_DOC = 2   # max chunks from the same document
@@ -51,6 +55,11 @@ THEME_KEYWORDS = {
 SYSTEM_PROMPT = (PROJECT_ROOT / "prompts" / "rag_pipeline_system_prompt.txt").read_text(encoding="utf-8")
 
 
+def _to_lc_messages(messages: list[dict]) -> list:
+    _MAP = {"system": SystemMessage, "user": HumanMessage, "assistant": AIMessage}
+    return [_MAP[m["role"]](content=m["content"]) for m in messages]
+
+
 class RagPipeline:
     """
     Owns the Chroma and OpenAI connections. Designed to be initialized once
@@ -62,7 +71,8 @@ class RagPipeline:
         chroma_path: Path = CHROMA_PATH,
         themes_path: Path = THEMES_PATH,
     ) -> None:
-        self.openai = OpenAI()
+        self._embedder = build_embedder()
+        self._llm      = build_chat_model()
 
         chroma = chromadb.PersistentClient(path=str(chroma_path))
         try:
@@ -126,12 +136,8 @@ class RagPipeline:
 
         messages = _build_messages(question, chunks, theme_ctx, history)
 
-        response = self.openai.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=messages,
-            temperature=TEMPERATURE,
-        )
-        answer_text = response.choices[0].message.content.strip()
+        response    = self._llm.invoke(_to_lc_messages(messages))
+        answer_text = response.content.strip()
 
         sources = [
             {
@@ -156,8 +162,7 @@ class RagPipeline:
 
     def _retrieve(self, question: str, where: dict | None) -> list[dict]:
         """Embed the question, query Chroma, dedupe to MAX_PER_DOC per doc."""
-        emb = self.openai.embeddings.create(model=EMBED_MODEL, input=[question])
-        query_vec = emb.data[0].embedding
+        query_vec = self._embedder.embed_query(question)
 
         try:
             results = self.collection.query(

@@ -1,4 +1,4 @@
-import inspect
+﻿import inspect
 from pathlib import Path
 
 import pytest
@@ -53,15 +53,6 @@ def test_local_source_skips_unsupported_extensions(tmp_path):
     assert docs[0]["file_name"] == "doc.pdf"
 
 
-def test_local_source_infers_program_from_top_folder(tmp_path):
-    prog_dir = tmp_path / "SWS"
-    prog_dir.mkdir()
-    (prog_dir / "notes.pdf").write_bytes(b"x")
-    source = LocalFolderSource(tmp_path)
-    docs = source.fetch_documents(tmp_path)
-    assert docs[0]["program"] == "SWS"
-
-
 def test_local_source_download_status_is_exists(tmp_path):
     (tmp_path / "file.pdf").write_bytes(b"x")
     source = LocalFolderSource(tmp_path)
@@ -82,3 +73,49 @@ def test_local_source_local_path_is_absolute(tmp_path):
     source = LocalFolderSource(tmp_path)
     docs = source.fetch_documents(tmp_path)
     assert Path(docs[0]["local_path"]).is_absolute()
+
+
+def test_local_source_tags_is_dict(tmp_path):
+    (tmp_path / "file.pdf").write_bytes(b"x")
+    source = LocalFolderSource(tmp_path)
+    docs = source.fetch_documents(tmp_path)
+    assert isinstance(docs[0]["tags"], dict)
+
+
+def test_local_source_tags_populated_from_folder_levels(tmp_path, monkeypatch):
+    """Tags are built from FOLDER_METADATA_LEVELS config."""
+    import importlib
+    import config
+    monkeypatch.setenv("FOLDER_METADATA_LEVELS", "department,category")
+    importlib.reload(config)
+
+    dept_dir = tmp_path / "HR"
+    cat_dir  = dept_dir / "Reports"
+    cat_dir.mkdir(parents=True)
+    (cat_dir / "file.pdf").write_bytes(b"x")
+
+    source = LocalFolderSource(tmp_path)
+    docs   = source.fetch_documents(tmp_path)
+
+    assert docs[0]["tags"].get("department") == "HR"
+    assert docs[0]["tags"].get("category")   == "Reports"
+
+    # restore
+    monkeypatch.setenv("FOLDER_METADATA_LEVELS", "")
+    importlib.reload(config)
+
+
+def test_local_source_no_tags_without_levels(tmp_path, monkeypatch):
+    """When FOLDER_METADATA_LEVELS is empty, tags is an empty dict."""
+    import importlib
+    import config
+    monkeypatch.setenv("FOLDER_METADATA_LEVELS", "")
+    importlib.reload(config)
+
+    prog_dir = tmp_path / "SomeFolder"
+    prog_dir.mkdir()
+    (prog_dir / "file.pdf").write_bytes(b"x")
+
+    source = LocalFolderSource(tmp_path)
+    docs   = source.fetch_documents(tmp_path)
+    assert docs[0]["tags"] == {}

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 2: Document Fetcher
 
 Downloads every file from the Shared Drive and writes:
@@ -46,7 +46,6 @@ PROJECT_ROOT = Path(__file__).parent.parent
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 METADATA_PATH = PROJECT_ROOT / "data" / "metadata.json"
-OVERRIDES_PATH = PROJECT_ROOT / "config" / "doc_type_overrides.json"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 DOWNLOAD_DELAY_SECONDS = 0.1
 
@@ -586,17 +585,6 @@ def fetch_all_documents(service, drive_id: str, dest_dir: Path) -> list[dict]:
             "downloaded_at":   now,
         })
 
-    # Apply manual doc_type overrides from audit
-    if OVERRIDES_PATH.exists():
-        with open(OVERRIDES_PATH, encoding="utf-8") as f:
-            overrides: dict[str, dict] = json.load(f)
-        override_count = 0
-        for record in metadata:
-            if record["file_id"] in overrides:
-                record["doc_type"] = overrides[record["file_id"]]["doc_type"]
-                override_count += 1
-        print(f"  Applied {override_count} doc_type overrides")
-
     for record in metadata:
         record["file_type"] = FILE_TYPE_MAP.get(record.get("mime_type", ""), "other")
         record["data_form"] = None
@@ -669,11 +657,6 @@ def stream_docs(service, drive_id: str):
 
     Metadata fields match what main() writes to metadata.json.
     """
-    overrides: dict[str, dict] = {}
-    if OVERRIDES_PATH.exists():
-        with open(OVERRIDES_PATH, encoding="utf-8") as f:
-            overrides = json.load(f)
-
     print("Connecting to Google Drive...")
     print("Fetching file list...")
     all_items = list_all_items(service, drive_id)
@@ -699,9 +682,6 @@ def stream_docs(service, drive_id: str):
         parent_id   = parents[0] if parents else drive_id
         folder_path = path_map.get(parent_id, "")
         parsed      = parse_path_metadata(folder_path, file_name)
-
-        if file_id in overrides:
-            parsed["doc_type"] = overrides[file_id]["doc_type"]
 
         ext = _file_extension(mime_type, file_name)
         record = {

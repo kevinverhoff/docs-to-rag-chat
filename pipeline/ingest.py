@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3: Text Extractor
 
 Reads metadata.json, extracts text from every downloaded file, and writes

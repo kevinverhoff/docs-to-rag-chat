@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3.5: Theme Extractor
 
 Reads documents.parquet, calls gpt-4o-mini once per document to extract:
@@ -143,7 +143,7 @@ def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | N
         return {}, "skipped", "Insufficient text"
 
     needs_date     = record.get("date_precision") == "unknown"
-    needs_district = not record.get("district")
+    needs_district = False
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -161,7 +161,7 @@ def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | N
         "notable_quotes": json.dumps(result.get("notable_quotes", []), ensure_ascii=False),
         "inferred_academic_year": result.get("inferred_academic_year") if needs_date     else None,
         "inferred_season":        result.get("inferred_season")        if needs_date     else None,
-        "inferred_district":      result.get("inferred_district")      if needs_district else None,
+        
     }
     return fields, "ok", None
 

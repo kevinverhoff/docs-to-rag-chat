@@ -1,4 +1,4 @@
-"""
+﻿"""
 Central configuration -- reads from secrets/.env.
 Every configurable value lives here; nothing else should read env vars directly.
 """
@@ -52,6 +52,16 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # ------------------------------------------------------------------
 SOURCE_TYPE    = os.getenv("SOURCE_TYPE", "gdrive").lower()   # gdrive | local
 LOCAL_DOCS_DIR = os.getenv("LOCAL_DOCS_DIR", "")
+
+# Folder depth -> tag name for LocalFolderSource.
+# Comma-separated names: depth 0 = first name, depth 1 = second, etc.
+# E.g., FOLDER_METADATA_LEVELS=department,category maps:
+#   root/HR/Reports/file.pdf  ->  tags = {"department": "HR", "category": "Reports"}
+FOLDER_METADATA_LEVELS: list[str] = [
+    s.strip()
+    for s in os.getenv("FOLDER_METADATA_LEVELS", "").split(",")
+    if s.strip()
+]
 
 # ------------------------------------------------------------------
 # Google Drive  (only needed when SOURCE_TYPE=gdrive)

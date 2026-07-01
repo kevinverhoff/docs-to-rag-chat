@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 8: Tool definitions for the document agent.
 
 Tools are created via make_tools(pipeline, themes_df) which returns a list
@@ -58,7 +58,7 @@ def make_tools(
 
     _synth_llm = _build_chat_model()
 
-    # Verified file_name → drive_url mapping from themes.parquet.
+    # Verified file_name â†’ drive_url mapping from themes.parquet.
     # Overrides whatever URL the vector store chunk metadata contains,
     # which may be mismatched due to ingestion ordering issues.
     url_lookup: dict[str, str] = {}
@@ -185,7 +185,7 @@ def make_tools(
             if meta.get("academic_year"): attr_parts.append(meta["academic_year"])
             attribution = " | ".join(attr_parts)
             lines.append(f'> "{c["text"].strip()}"')
-            lines.append(f'> — {attribution}')
+            lines.append(f'> â€” {attribution}')
             lines.append("")
 
         return "\n".join(lines)
@@ -261,7 +261,7 @@ def make_tools(
         Compare how a topic appears across programs, districts, or academic years
         using semantic search across the document corpus.
 
-        dimension: what to compare across — "program", "district", or "academic_year"
+        dimension: what to compare across â€” "program", "district", or "academic_year"
         topic: the question or theme to search for
 
         Fixed filters (program, district, academic_year, doc_type) narrow the corpus
@@ -310,7 +310,7 @@ def make_tools(
         sorted_vals = sorted(groups.keys(), key=lambda v: (v == "Unknown", v or ""))
 
         noun = dim.replace("_", " ").title()
-        lines = [f"**{noun} comparison — {topic}**\n"]
+        lines = [f"**{noun} comparison â€” {topic}**\n"]
 
         for val in sorted_vals:
             val_chunks = groups[val]
@@ -324,7 +324,7 @@ def make_tools(
                 if dim != "district"      and meta.get("district"):      attr_parts.append(meta["district"])
                 if dim != "academic_year" and meta.get("academic_year"): attr_parts.append(meta["academic_year"])
                 lines.append(f'> "{chunk["text"].strip()}"')
-                lines.append(f'> — {" | ".join(attr_parts)}')
+                lines.append(f'> â€” {" | ".join(attr_parts)}')
                 lines.append("")
             lines.append("")
 
@@ -343,7 +343,7 @@ def make_tools(
         Write a 2-4 sentence synthesis paragraph from the most recent compare() call.
 
         Identifies key similarities and differences across groups on the topic.
-        Always call this immediately after compare() — it reads the compare() result
+        Always call this immediately after compare() â€” it reads the compare() result
         directly without requiring you to repeat the passages.
 
         topic: the same topic passed to compare()
@@ -453,7 +453,7 @@ def make_tools(
         """
         from pipeline.survey_stats import survey_stats_for_file
 
-        # Find matching file — normalize spaces/underscores and match bidirectionally
+        # Find matching file â€” normalize spaces/underscores and match bidirectionally
         def _normalize(s: str) -> str:
             return s.lower().replace("_", " ")
 
@@ -529,8 +529,8 @@ def _format_rag_result(result: dict, url_lookup: dict | None = None) -> str:
         if tag in answer:
             answer = answer.replace(tag, f"({link})")
         else:
-            meta = " | ".join(filter(None, [s.get("district"), s.get("academic_year")]))
-            trailing.append(f"  - {link}" + (f" — {meta}" if meta else ""))
+            meta = " | ".join(f"{k}={v}" for k, v in s.get("tags", {}).items())
+            trailing.append(f"  - {link}" + (f" â€” {meta}" if meta else ""))
 
     if trailing:
         answer += "\n\nSources:\n" + "\n".join(trailing)

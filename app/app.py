@@ -387,7 +387,12 @@ def chat_tab(ag, filters: dict) -> None:
                         {"role": m["role"], "content": m["content"]}
                         for m in st.session_state.messages[:-1]
                     ]
-                    result = ag.chat(prompt, history=history, **filters)
+                    result = ag.chat(
+                        prompt,
+                        history=history,
+                        filters=filters.get("filters"),
+                        theme_cluster=filters.get("theme_cluster"),
+                    )
 
                 answer, sources = _split_answer_sources(result["answer"])
                 trace, usage = _extract_trace(result.get("messages", []))
@@ -471,7 +476,18 @@ def browse_tab(themes_df: pd.DataFrame | None, filters: dict) -> None:
         st.warning(f"'{group_col}' column not available.")
         return
 
-    groups = sorted(df.groupby(group_col, dropna=True), key=lambda x: str(x[0]))
+    def _get_tag(tags_val):
+        try:
+            t = json.loads(tags_val) if isinstance(tags_val, str) else (tags_val or {})
+            return t.get(group_col, "")
+        except Exception:
+            return ""
+
+    _group_vals = df["tags"].apply(_get_tag) if "tags" in df.columns else pd.Series([""] * len(df))
+    groups = sorted(
+        df.groupby(_group_vals.where(_group_vals != "", other=None).dropna(), dropna=True),
+        key=lambda x: str(x[0]),
+    )
 
     for name, group in groups:
         if not name:

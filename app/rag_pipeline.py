@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 7: RAG Pipeline
 
 RagPipeline wraps Chroma + OpenAI into a single cached object.

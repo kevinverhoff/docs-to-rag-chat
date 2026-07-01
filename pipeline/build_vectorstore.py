@@ -1,4 +1,4 @@
-"""
+﻿"""
 Steps 4-6: Chunker + Embedder + Vector Store
 
 Reads documents.parquet, chunks each document (header-aware for DOCX files),

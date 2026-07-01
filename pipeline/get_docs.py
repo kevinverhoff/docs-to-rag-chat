@@ -33,6 +33,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent))
+import config as _config
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -50,39 +54,13 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 DOWNLOAD_DELAY_SECONDS = 0.1
 
 # ---------------------------------------------------------------------------
-# Program mapping -- keyed on lowercase folder name
+# Program mapping + district names -- loaded from tags_config.yaml via config
 # ---------------------------------------------------------------------------
 
-PROGRAM_MAP: dict[str, str] = {
-    "!_multiple programs": "Multiple Programs",
-    "0_ekumen outreach": "Ekumen Outreach",
-    "1_ansible studies": "Ansible Studies",
-    "2_hainish mathematics": "Hainish Mathematics",
-    "3_mobile training": "Mobile Training",
-    "4_odonian method": "Odonian Method",
-    "4_odonian": "Odonian Method",
-    "5_ansible initiative": "Ansible Initiative",
-    "6_ekumen council": "Ekumen Council",
-    "background": "Background",
-}
-
-# ---------------------------------------------------------------------------
-# District names -- lowercase for substring matching against path + filename
-# Ordered longest-first so "palm beach" matches before "palm"
-# ---------------------------------------------------------------------------
-
-KNOWN_DISTRICTS: list[str] = [
-    "rocannon's world", "gethen", "anarres", "urras",
-    "athshe", "werel", "yeowe", "seggri",
-    "aka", "davenant", "chiffewar", "hain",
-    "terra", "karhide", "orgoreyn", "abbenay",
-    "a-io", "ekumen central",
-]
-
-# Canonical display names keyed on the lowercase match string above
+PROGRAM_MAP:      dict[str, str] = _config.GDRIVE_PROGRAM_MAP
+KNOWN_DISTRICTS:  list[str]      = _config.GDRIVE_KNOWN_DISTRICTS
 DISTRICT_DISPLAY: dict[str, str] = {d: d.title() for d in KNOWN_DISTRICTS}
-DISTRICT_DISPLAY["rocannon's world"] = "Rocannon's World"
-DISTRICT_DISPLAY["a-io"] = "A-Io"
+DISTRICT_DISPLAY.update(_config.GDRIVE_DISTRICT_DISPLAY)
 
 # ---------------------------------------------------------------------------
 # Month name to number

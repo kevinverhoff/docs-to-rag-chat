@@ -91,3 +91,13 @@ def test_config_exposes_tags_constants():
     assert len(config.GDRIVE_PROGRAM_MAP) > 0
     assert len(config.GDRIVE_KNOWN_DISTRICTS) > 0
     assert len(config.FILTER_TAG_KEYS) > 0
+
+def test_get_docs_reads_program_map_from_config():
+    """get_docs.PROGRAM_MAP is populated from config (tags_config.yaml), not hardcoded."""
+    import pipeline.get_docs as gd
+    import config
+    # PROGRAM_MAP should be the same object as config.GDRIVE_PROGRAM_MAP
+    assert gd.PROGRAM_MAP is config.GDRIVE_PROGRAM_MAP
+    # Should contain the Ekumen Outreach entry from tags_config.yaml
+    assert "0_ekumen outreach" in gd.PROGRAM_MAP
+    assert gd.PROGRAM_MAP["0_ekumen outreach"] == "Ekumen Outreach"

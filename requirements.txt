@@ -30,6 +30,7 @@ pyarrow>=14.0.0
 
 # Config / UI
 python-dotenv>=1.0.0
+pyyaml>=6.0
 streamlit>=1.35.0
 
 # Feedback / Google Sheets

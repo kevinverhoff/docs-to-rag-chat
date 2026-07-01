@@ -72,3 +72,27 @@ SHARED_DRIVE_ID = os.getenv("SHARED_DRIVE_ID", "")
 # Vector store
 # ------------------------------------------------------------------
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "docs")
+
+# ------------------------------------------------------------------
+# Tags config  (drives GDrive folder inference + app sidebar filters)
+# ------------------------------------------------------------------
+try:
+    import yaml as _yaml
+
+    def _load_tags_config(path: "Path") -> dict:
+        if path.exists():
+            with open(path, encoding="utf-8") as _f:
+                return _yaml.safe_load(_f) or {}
+        return {}
+
+except ImportError:
+    def _load_tags_config(path: "Path") -> dict:  # type: ignore[misc]
+        return {}
+
+_TAGS_CONFIG_PATH = PROJECT_ROOT / "tags_config.yaml"
+_TAGS_CONFIG = _load_tags_config(_TAGS_CONFIG_PATH)
+
+GDRIVE_PROGRAM_MAP: dict[str, str]      = _TAGS_CONFIG.get("program_map", {})
+GDRIVE_KNOWN_DISTRICTS: list[str]       = _TAGS_CONFIG.get("known_districts", [])
+GDRIVE_DISTRICT_DISPLAY: dict[str, str] = _TAGS_CONFIG.get("district_display", {})
+FILTER_TAG_KEYS: list[str]              = _TAGS_CONFIG.get("filter_keys", [])

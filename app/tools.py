@@ -205,8 +205,8 @@ def make_tools(
         """
         Browse the pre-extracted themes database. Returns themes, clusters, and
         key findings for documents matching the given filters.
-        Use for open-ended exploration: "what themes appear in Lake district?" or
-        "what are the main themes in SWS from 2024-25?".
+        Use for open-ended exploration: "what themes appear in Gethen?" or
+        "what are the main themes in Ekumen Outreach from 2024-25?".
         At least one filter is recommended to avoid returning the entire corpus.
         """
         if themes_df is None:
@@ -265,7 +265,7 @@ def make_tools(
         topic: the question or theme to search for
 
         Fixed filters (program, district, academic_year, doc_type) narrow the corpus
-        before splitting by dimension. For example, set program="SWS" to compare SWS
+        before splitting by dimension. For example, set program="Ekumen Outreach" to compare Ekumen Outreach
         across districts, or doc_type="site_visit" to restrict to site visit documents.
 
         Returns retrieved passages grouped and cited by dimension value, ready for
@@ -274,7 +274,7 @@ def make_tools(
         Use for:
           "How does teacher buy-in differ across programs?"
           "How has coaching support changed over time?"
-          "How do Focus K-3 districts differ in implementation?"
+          "How do Ansible Studies worlds differ in implementation?"
         """
         from collections import defaultdict
 

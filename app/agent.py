@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 8: ReAct agent for document library.
 
 Uses a custom LangGraph graph that forces tool_choice="required" on the first
@@ -11,7 +11,7 @@ Usage:
   from rag_pipeline import RagPipeline
   pipeline = RagPipeline()
   ag = Agent(pipeline)
-  result = ag.chat("What challenges have districts reported?")
+  result = ag.chat("What challenges have the Ekumen worlds reported?")
   print(result["answer"])
 """
 
@@ -180,7 +180,7 @@ class Agent:
             "You ran out of steps before finishing your research. "
             "Summarize the information you gathered so far into a helpful partial response. "
             "Be clear about what you found and what you didn't get to explore. "
-            "End with a short note — something like: "
+            "End with a short note â€” something like: "
             "'This is a partial response. To go deeper, try asking a more specific "
             "follow-up question (e.g., about a single program, district, or document type).'"
         )
@@ -210,10 +210,10 @@ if __name__ == "__main__":
         description="Chat with the document agent.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  python agent.py "What coaching challenges have districts reported?"
-  python agent.py "How has teacher buy-in changed over time?" --program SWS
-  python agent.py "What themes appear in Lake district?" --district Lake
-  python agent.py "Compare Focus K-3 implementation across districts" --doc-type site_visit
+  python agent.py "What challenges have the Ekumen worlds reported?"
+  python agent.py "How has mobile training uptake changed over time?" --program "Ekumen Outreach"
+  python agent.py "What themes appear in Gethen?" --district Gethen
+  python agent.py "Compare Ansible Studies implementation across worlds" --doc-type site_visit
 """,
     )
     parser.add_argument("question")

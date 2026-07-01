@@ -1058,12 +1058,12 @@ def test_local_source_skips_unsupported_extensions(tmp_path):
 
 
 def test_local_source_infers_program_from_top_folder(tmp_path):
-    prog_dir = tmp_path / "SWS"
+    prog_dir = tmp_path / "Ekumen Outreach"
     prog_dir.mkdir()
     (prog_dir / "notes.pdf").write_bytes(b"x")
     source = LocalFolderSource(tmp_path)
     docs = source.fetch_documents(tmp_path)
-    assert docs[0]["program"] == "SWS"
+    assert docs[0]["program"] == "Ekumen Outreach"
 
 
 def test_local_source_download_status_is_exists(tmp_path):

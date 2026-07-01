@@ -9,8 +9,8 @@ Usage:
   from rag_pipeline import RagPipeline
   pipeline = RagPipeline()
   result = pipeline.answer(
-      "What are the main challenges in SWS implementation?",
-      program="SWS", district="Lake",
+      "What are the main challenges in Ekumen Outreach implementation?",
+      program="Ekumen Outreach", district="Gethen",
   )
   print(result["answer"])
   for src in result["sources"]:
@@ -314,15 +314,15 @@ if __name__ == "__main__":
         description="Ask a question against the document library.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
-  python rag_pipeline.py "What challenges have districts reported with SWS?"
-  python rag_pipeline.py "What are teachers saying?" --district Lake --program SWS
+  python rag_pipeline.py "What challenges have worlds reported with Ekumen Outreach?"
+  python rag_pipeline.py "What are mobiles saying?" --district Gethen --program "Ekumen Outreach"
   python rag_pipeline.py "How has teacher buy-in changed?" --year 2024-25 --theme-cluster "Educator Development"
 """,
     )
 
     parser.add_argument("question", help="Question to ask")
-    parser.add_argument("--program",  default=None, help="Filter by program (e.g. SWS, Focus K-3)")
-    parser.add_argument("--district", default=None, help="Filter by district (e.g. Lake, Osceola)")
+    parser.add_argument("--program",  default=None, help="Filter by program (e.g. Ekumen Outreach, Ansible Studies)")
+    parser.add_argument("--district", default=None, help="Filter by world (e.g. Gethen, Anarres)")
     parser.add_argument("--year",     default=None, help="Filter by academic year (e.g. 2024-25)")
     parser.add_argument("--doc-type", default=None, dest="doc_type", help="Filter by doc type (e.g. site_visit)")
     parser.add_argument("--theme-cluster", default=None, dest="theme_cluster",

@@ -6,14 +6,14 @@ Downloads every file from the Shared Drive and writes:
   - metadata.json              one record per file with structured metadata
 
 Metadata fields parsed from folder paths:
-  program         Top-level program area (SWS, Focus K-3, etc.)
+  program         Top-level program area (Ekumen Outreach, Ansible Studies, etc.)
   doc_type        Document category (site_visit, survey_reflection, etc.)
   academic_year   e.g. "2025-26" -- derived using the July boundary rule:
                     month >= 7  ->  [year]-[year+1]
                     month < 7   ->  [year-1]-[year]
   season          "Fall" (Jul-Dec) or "Spring" (Jan-Jun), null if unknown
   date_precision  "direct" | "month_derived" | "unknown"
-  district        Lake, Lee, Osceola, Pasco, Polk, St. Lucie, etc.
+  district        Gethen, Anarres, Urras, Werel, Hain, etc.
 
 Usage:
   python pipeline/get_docs.py
@@ -55,15 +55,14 @@ DOWNLOAD_DELAY_SECONDS = 0.1
 
 PROGRAM_MAP: dict[str, str] = {
     "!_multiple programs": "Multiple Programs",
-    "0_sws": "SWS",
-    "1_focus k-3": "Focus K-3",
-    "2_math materials": "Math Materials",
-    "3_teacher workforce": "Teacher Workforce",
-    "4_eir/game based learning": "EIR/GBL",
-    "4_eir": "EIR/GBL",
-    "5_spark": "SPARK",
-    "6_nat hqim/policy & advocacy": "NAT HQIM",
-    "6_nat hqim": "NAT HQIM",
+    "0_ekumen outreach": "Ekumen Outreach",
+    "1_ansible studies": "Ansible Studies",
+    "2_hainish mathematics": "Hainish Mathematics",
+    "3_mobile training": "Mobile Training",
+    "4_odonian method": "Odonian Method",
+    "4_odonian": "Odonian Method",
+    "5_ansible initiative": "Ansible Initiative",
+    "6_ekumen council": "Ekumen Council",
     "background": "Background",
 }
 
@@ -73,16 +72,17 @@ PROGRAM_MAP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 KNOWN_DISTRICTS: list[str] = [
-    "miami-dade", "st. lucie", "palm beach", "santa rosa",
-    "hillsborough", "okaloosa", "alachua", "broward", "osceola",
-    "flagler", "collier", "marion", "nassau", "putnam",
-    "pasco", "lake", "levy", "clay", "polk", "lee",
+    "rocannon's world", "gethen", "anarres", "urras",
+    "athshe", "werel", "yeowe", "seggri",
+    "aka", "davenant", "chiffewar", "hain",
+    "terra", "karhide", "orgoreyn", "abbenay",
+    "a-io", "ekumen central",
 ]
 
 # Canonical display names keyed on the lowercase match string above
 DISTRICT_DISPLAY: dict[str, str] = {d: d.title() for d in KNOWN_DISTRICTS}
-DISTRICT_DISPLAY["miami-dade"] = "Miami-Dade"
-DISTRICT_DISPLAY["st. lucie"] = "St. Lucie"
+DISTRICT_DISPLAY["rocannon's world"] = "Rocannon's World"
+DISTRICT_DISPLAY["a-io"] = "A-Io"
 
 # ---------------------------------------------------------------------------
 # Month name to number
@@ -426,7 +426,7 @@ def parse_path_metadata(folder_path: str, file_name: str = "") -> dict:
     from a Drive folder path and file name.
 
     District and date signals are scanned from both the folder path components
-    and the file name so that files like "Lee County_Project Thrive - June 2026.pdf"
+    and the file name so that files like "Gethen_Initiative_Report - June 2026.pdf"
     are correctly tagged even when the folder path has no district marker.
     """
     parts = [p.strip() for p in folder_path.split("/") if p.strip()]

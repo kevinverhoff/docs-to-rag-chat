@@ -43,8 +43,9 @@ MIN_CHARS = 100      # skip docs with too little text to extract themes from
 REQUEST_DELAY = 0.1  # seconds between API calls
 
 KNOWN_DISTRICTS = [
-    "Lake", "Lee", "Osceola", "Pasco", "Polk",
-    "St. Lucie", "Hillsborough", "Miami-Dade", "Broward",
+    "Gethen", "Anarres", "Urras", "Werel",
+    "Hain", "Athshe", "Seggri", "Karhide",
+    "Orgoreyn", "Davenant",
 ]
 
 # Columns carried through from documents.parquet into themes_raw.parquet.
@@ -88,7 +89,7 @@ def _build_user_prompt(text: str, needs_date: bool, needs_district: bool) -> str
     if needs_district:
         districts = ", ".join(f'"{d}"' for d in KNOWN_DISTRICTS)
         extra_fields += f"""
-{n}. inferred_district (string or null): The Florida school district this
+{n}. inferred_district (string or null): The Hainish world this
    document appears to be about. Choose from: {districts}.
    Return null if the document spans multiple districts or gives no indication.
 """

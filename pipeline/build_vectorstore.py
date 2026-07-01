@@ -165,11 +165,14 @@ def _build_prefix(rec: dict, section: str | None) -> str:
     lines = [f"File: {rec.get('file_name', '')}"]
     if rec.get("folder_path"):
         lines.append(f"Folder: {rec['folder_path']}")
-    parts = []
-    if rec.get("program"):       parts.append(f"Program: {rec['program']}")
-    if rec.get("district"):      parts.append(f"District: {rec['district']}")
-    if rec.get("academic_year"): parts.append(f"Year: {rec['academic_year']}")
-    if rec.get("season"):        parts.append(f"Season: {rec['season']}")
+    try:
+        tags = json.loads(rec.get("tags") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        tags = {}
+    parts = [
+        f"{k.replace('_', ' ').title()}: {v}"
+        for k, v in tags.items() if v
+    ]
     if parts:
         lines.append(" | ".join(parts))
     if section:
@@ -206,18 +209,18 @@ def embed_and_index(
     ids       = [f"{rec['file_id']}_chunk_{c['chunk_index']}" for c in chunks]
     documents = [c["text"] for c in chunks]
 
+    try:
+        tags: dict = json.loads(rec.get("tags") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        tags = {}
+
     metadatas = [
         {
             "file_id":        _safe(rec.get("file_id")),
             "file_name":      _safe(rec.get("file_name")),
             "drive_url":      _safe(rec.get("drive_url")),
             "folder_path":    _safe(rec.get("folder_path")),
-            "program":        _safe(rec.get("program")),
-            "doc_type":       _safe(rec.get("doc_type")),
-            "academic_year":  _safe(rec.get("academic_year")),
-            "season":         _safe(rec.get("season")),
-            "date_precision": _safe(rec.get("date_precision")),
-            "district":       _safe(rec.get("district")),
+            **{k: _safe(v) for k, v in tags.items()},
             "section_h1":     _safe(c.get("section_h1")),
             "section_h2":     _safe(c.get("section_h2")),
             "section_h3":     _safe(c.get("section_h3")),

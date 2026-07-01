@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3.6: Theme Deduplicator
 
 Builds a three-level theme hierarchy and writes:
@@ -238,12 +238,6 @@ def main() -> None:
         out.loc[date_mask, "date_precision"] = "llm_inferred"
         print(f"  Promoted inferred dates for {date_mask.sum()} documents")
 
-    # Promote LLM-inferred district where folder path gave none
-    if "inferred_district" in out.columns:
-        dist_mask = out["district"].isna() & out["inferred_district"].notna()
-        if dist_mask.any():
-            out.loc[dist_mask, "district"] = out.loc[dist_mask, "inferred_district"]
-            print(f"  Promoted inferred district for {dist_mask.sum()} documents")
 
     out.to_parquet(OUTPUT_PATH, index=False)
 

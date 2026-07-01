@@ -34,6 +34,8 @@ if str(PROJECT_ROOT) not in sys.path:
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 
 from providers import build_chat_model
+from config import GDRIVE_KNOWN_DISTRICTS
+
 
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents.parquet"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "themes_raw.parquet"
@@ -42,17 +44,13 @@ MAX_CHARS = 30_000   # truncate very long docs
 MIN_CHARS = 100      # skip docs with too little text to extract themes from
 REQUEST_DELAY = 0.1  # seconds between API calls
 
-KNOWN_DISTRICTS = [
-    "Gethen", "Anarres", "Urras", "Werel",
-    "Hain", "Athshe", "Seggri", "Karhide",
-    "Orgoreyn", "Davenant",
-]
+KNOWN_DISTRICTS: list[str] = GDRIVE_KNOWN_DISTRICTS
 
 # Columns carried through from documents.parquet into themes_raw.parquet.
 # Excludes `text` and `headings` (large, not needed downstream from themes).
 CARRY_COLS = [
     "file_id", "file_name", "mime_type", "folder_path", "local_path", "drive_url",
-    "program", "doc_type", "academic_year", "season", "date_precision", "district",
+    "tags",   # replaces individual program/doc_type/academic_year/season/date_precision/district
     "char_count", "extraction_status",
 ]
 
@@ -143,8 +141,12 @@ def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | N
     if record.get("extraction_status") != "ok" or len(text.strip()) < MIN_CHARS:
         return {}, "skipped", "Insufficient text"
 
-    needs_date     = record.get("date_precision") == "unknown"
-    needs_district = False
+    try:
+        existing_tags: dict = json.loads(record.get("tags") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        existing_tags = {}
+    needs_date     = existing_tags.get("date_precision") == "unknown"
+    needs_district = bool(KNOWN_DISTRICTS) and not existing_tags.get("district")
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -219,13 +221,19 @@ def main() -> None:
         counts[status] = counts.get(status, 0) + 1
 
         row = {col: rec.get(col) for col in CARRY_COLS}
+        if fields.get("inferred_district"):
+            try:
+                row_tags = json.loads(row.get("tags") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                row_tags = {}
+            row_tags["district"] = fields["inferred_district"]
+            row["tags"] = json.dumps(row_tags, ensure_ascii=False)
         row.update({
             "themes":                  fields.get("themes", "[]"),
             "key_findings":            fields.get("key_findings", "[]"),
             "notable_quotes":          fields.get("notable_quotes", "[]"),
             "inferred_academic_year":  fields.get("inferred_academic_year"),
             "inferred_season":         fields.get("inferred_season"),
-            "inferred_district":       fields.get("inferred_district"),
             "theme_extraction_status": status,
             "theme_extraction_error":  error,
         })

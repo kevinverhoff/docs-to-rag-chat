@@ -242,18 +242,33 @@ def main() -> None:
     out["theme_clusters"] = out["themes"].apply(
         lambda v: _apply_cluster_map(v, cluster_map)
     )
-
     # Promote LLM-inferred dates where folder path gave none
+    # date_precision, academic_year, and season live inside the tags JSON column
+    def _get_date_precision(tags_val):
+        try:
+            t = json.loads(tags_val) if isinstance(tags_val, str) else (tags_val or {})
+            return t.get("date_precision", "")
+        except Exception:
+            return ""
+
+    date_precision_series = out["tags"].apply(_get_date_precision)
     date_mask = (
-        (out["date_precision"] == "unknown")
+        (date_precision_series == "unknown")
         & out["inferred_academic_year"].notna()
     )
     if date_mask.any():
-        out.loc[date_mask, "academic_year"]  = out.loc[date_mask, "inferred_academic_year"]
-        out.loc[date_mask, "season"]         = out.loc[date_mask, "inferred_season"]
-        out.loc[date_mask, "date_precision"] = "llm_inferred"
-        print(f"  Promoted inferred dates for {date_mask.sum()} documents")
+        def _promote_dates(row):
+            try:
+                t = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row["tags"] or {})
+            except Exception:
+                t = {}
+            t["academic_year"] = row["inferred_academic_year"]
+            t["season"] = row["inferred_season"]
+            t["date_precision"] = "llm_inferred"
+            return json.dumps(t, ensure_ascii=False)
 
+        out.loc[date_mask, "tags"] = out.loc[date_mask].apply(_promote_dates, axis=1)
+        print(f"  Promoted inferred dates for {date_mask.sum()} documents")
 
     out.to_parquet(OUTPUT_PATH, index=False)
 

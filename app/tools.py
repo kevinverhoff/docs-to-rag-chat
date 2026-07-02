@@ -11,10 +11,9 @@ Q&A tools (vector store):
   extract_quotes -- verbatim passages with source attribution
 
 Cross-dimensional tools (themes.parquet):
-  browse_themes     -- filter the themes table by any dimension
-  compare_programs  -- how a topic appears across programs
-  compare_time      -- how a topic has evolved across academic years
-  compare_districts -- how a topic varies across districts
+  browse_themes  -- filter the themes table by tag filters and theme cluster
+  compare        -- how a topic appears across a given dimension
+  synthesize     -- synthesize results from the most recent compare() call
 """
 
 import json
@@ -58,9 +57,8 @@ def make_tools(
 
     _synth_llm = _build_chat_model()
 
-    # Verified file_name â†’ drive_url mapping from themes.parquet.
-    # Overrides whatever URL the vector store chunk metadata contains,
-    # which may be mismatched due to ingestion ordering issues.
+    # Verified file_name -> drive_url mapping from themes.parquet.
+    # Overrides whatever URL the vector store chunk metadata contains.
     url_lookup: dict[str, str] = {}
     if themes_df is not None:
         for _, _row in themes_df.dropna(subset=["drive_url"]).iterrows():
@@ -76,23 +74,26 @@ def make_tools(
     @tool
     def search(
         query: str,
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
-        doc_type: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
         theme_cluster: Optional[str] = None,
     ) -> str:
         """
         Search for documents relevant to a query. Returns document titles,
-        programs, districts, academic years, and similarity scores.
+        tag metadata, and similarity scores.
         Use this to discover what documents exist on a topic before calling answer().
-        All filters are optional.
+        tag_filters: optional dict of tag key/value pairs, e.g. {"program": "Ekumen Outreach"}.
+        theme_cluster: optional theme cluster string to restrict results.
         """
-        where = _build_where(program, district, academic_year, doc_type, theme_cluster)
+        where = _build_where(tag_filters, theme_cluster)
         chunks = pipeline._retrieve(query, where)
         if not chunks:
             return "No relevant documents found."
 
+        _META_SKIP = {
+            "file_id", "file_name", "drive_url", "folder_path",
+            "section_h1", "section_h2", "section_h3",
+            "chunk_index", "chunk_count", "theme_clusters",
+        }
         seen: set[str] = set()
         lines = []
         for c in chunks:
@@ -103,9 +104,9 @@ def make_tools(
             meta = c["meta"]
             score = round(1 - c["distance"], 3)
             parts = [meta.get("file_name", "unknown")]
-            if meta.get("program"):       parts.append(f"program={meta['program']}")
-            if meta.get("district"):      parts.append(f"district={meta['district']}")
-            if meta.get("academic_year"): parts.append(f"year={meta['academic_year']}")
+            for k, v in meta.items():
+                if k not in _META_SKIP and v:
+                    parts.append(f"{k}={v}")
             parts.append(f"score={score}")
             lines.append("- " + "  |  ".join(parts))
 
@@ -114,24 +115,19 @@ def make_tools(
     @tool
     def answer(
         query: str,
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
-        doc_type: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
         theme_cluster: Optional[str] = None,
     ) -> str:
         """
         Answer a specific question using retrieved document passages. Returns a
         cited answer with inline [1], [2] references and a Sources block with
         Google Drive links. Use for direct factual questions about documents.
-        All filters are optional and narrow retrieval to specific subsets.
+        tag_filters: optional dict of tag key/value pairs to narrow retrieval.
+        theme_cluster: optional theme cluster string to restrict results.
         """
         result = pipeline.answer(
             query,
-            program=program,
-            district=district,
-            academic_year=academic_year,
-            doc_type=doc_type,
+            tag_filters=tag_filters,
             theme_cluster=theme_cluster,
         )
         return _format_rag_result(result, url_lookup)
@@ -139,37 +135,33 @@ def make_tools(
     @tool
     def summarize(
         query: str,
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
     ) -> str:
         """
         Synthesize a high-level overview across multiple documents on a topic.
         Retrieves more documents than answer() for a broader picture.
         Use when the user wants general understanding rather than a specific fact.
+        tag_filters: optional dict of tag key/value pairs to narrow retrieval.
         """
         synthesis_q = f"Synthesize an overview and key takeaways about: {query}"
         result = pipeline.answer(
             synthesis_q,
-            program=program,
-            district=district,
-            academic_year=academic_year,
+            tag_filters=tag_filters,
         )
         return _format_rag_result(result, url_lookup)
 
     @tool
     def extract_quotes(
         query: str,
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
     ) -> str:
         """
         Return verbatim passages from documents relevant to a query.
         Each passage is attributed to its source document with a Google Drive link.
         Use when the user explicitly wants direct quotes or exact language.
+        tag_filters: optional dict of tag key/value pairs to narrow retrieval.
         """
-        where = _build_where(program, district, academic_year, None, None)
+        where = _build_where(tag_filters, None)
         chunks = pipeline._retrieve(query, where)
         if not chunks:
             return "No relevant documents found."
@@ -185,7 +177,7 @@ def make_tools(
             if meta.get("academic_year"): attr_parts.append(meta["academic_year"])
             attribution = " | ".join(attr_parts)
             lines.append(f'> "{c["text"].strip()}"')
-            lines.append(f'> â€” {attribution}')
+            lines.append(f'> -- {attribution}')
             lines.append("")
 
         return "\n".join(lines)
@@ -196,10 +188,7 @@ def make_tools(
 
     @tool
     def browse_themes(
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
-        doc_type: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
         theme_cluster: Optional[str] = None,
     ) -> str:
         """
@@ -207,16 +196,24 @@ def make_tools(
         key findings for documents matching the given filters.
         Use for open-ended exploration: "what themes appear in Gethen?" or
         "what are the main themes in Ekumen Outreach from 2024-25?".
+        tag_filters: dict of tag key/value pairs, e.g. {"district": "Gethen"}.
+        theme_cluster: optional theme cluster string.
         At least one filter is recommended to avoid returning the entire corpus.
         """
         if themes_df is None:
             return "Themes database not available -- run pipeline/deduplicate_themes.py first."
 
         df = themes_df[themes_df["theme_extraction_status"] == "ok"].copy()
-        if program:       df = df[df["program"] == program]
-        if district:      df = df[df["district"] == district]
-        if academic_year: df = df[df["academic_year"] == academic_year]
-        if doc_type:      df = df[df["doc_type"] == doc_type]
+
+        if tag_filters:
+            def _matches(row):
+                try:
+                    tags = json.loads(row.get("tags") or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    tags = {}
+                return all(tags.get(k) == v for k, v in tag_filters.items() if v)
+            df = df[df.apply(_matches, axis=1)]
+
         if theme_cluster:
             df = df[df["theme_clusters"].apply(
                 lambda v: theme_cluster in _parse_json_list(v)
@@ -252,21 +249,19 @@ def make_tools(
     def compare(
         topic: str,
         dimension: str,
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        academic_year: Optional[str] = None,
-        doc_type: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
     ) -> str:
         """
         Compare how a topic appears across programs, districts, or academic years
         using semantic search across the document corpus.
 
-        dimension: what to compare across â€” "program", "district", or "academic_year"
+        dimension: tag key to compare across -- "program", "district", or "academic_year"
         topic: the question or theme to search for
 
-        Fixed filters (program, district, academic_year, doc_type) narrow the corpus
-        before splitting by dimension. For example, set program="Ekumen Outreach" to compare Ekumen Outreach
-        across districts, or doc_type="site_visit" to restrict to site visit documents.
+        tag_filters: optional dict to narrow the corpus before splitting by dimension.
+        For example, {"program": "Ekumen Outreach"} to compare across districts,
+        or {"doc_type": "site_visit"} to restrict to site visit documents.
+        The dimension key is automatically excluded so all dimension values are retrieved.
 
         Returns retrieved passages grouped and cited by dimension value, ready for
         side-by-side synthesis.
@@ -278,17 +273,11 @@ def make_tools(
         """
         from collections import defaultdict
 
-        VALID = {"program", "district", "academic_year"}
         dim = dimension.lower().strip()
-        if dim not in VALID:
-            return f"Invalid dimension '{dimension}'. Choose one of: program, district, academic_year"
 
-        # Build a where clause that omits the comparison dimension
-        # so chunks from all dimension values are retrieved together
-        fixed_prog = None if dim == "program"       else program
-        fixed_dist = None if dim == "district"      else district
-        fixed_year = None if dim == "academic_year" else academic_year
-        where = _build_where(fixed_prog, fixed_dist, fixed_year, doc_type, None)
+        # Exclude the comparison dimension from filters so all its values are retrieved
+        fixed_filters = {k: v for k, v in (tag_filters or {}).items() if k != dim} or None
+        where = _build_where(fixed_filters, None)
 
         chunks = pipeline._retrieve(topic, where)
         if not chunks:
@@ -310,7 +299,7 @@ def make_tools(
         sorted_vals = sorted(groups.keys(), key=lambda v: (v == "Unknown", v or ""))
 
         noun = dim.replace("_", " ").title()
-        lines = [f"**{noun} comparison â€” {topic}**\n"]
+        lines = [f"**{noun} comparison -- {topic}**\n"]
 
         for val in sorted_vals:
             val_chunks = groups[val]
@@ -324,7 +313,7 @@ def make_tools(
                 if dim != "district"      and meta.get("district"):      attr_parts.append(meta["district"])
                 if dim != "academic_year" and meta.get("academic_year"): attr_parts.append(meta["academic_year"])
                 lines.append(f'> "{chunk["text"].strip()}"')
-                lines.append(f'> â€” {" | ".join(attr_parts)}')
+                lines.append(f'> -- {" | ".join(attr_parts)}')
                 lines.append("")
             lines.append("")
 
@@ -343,7 +332,7 @@ def make_tools(
         Write a 2-4 sentence synthesis paragraph from the most recent compare() call.
 
         Identifies key similarities and differences across groups on the topic.
-        Always call this immediately after compare() â€” it reads the compare() result
+        Always call this immediately after compare() -- it reads the compare() result
         directly without requiring you to repeat the passages.
 
         topic: the same topic passed to compare()
@@ -384,37 +373,39 @@ def make_tools(
     if metadata:
         for rec in metadata:
             if rec.get("mime_type", "") in _SPREADSHEET_MIMES:
+                try:
+                    _tags = json.loads(rec.get("tags") or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    _tags = {}
                 _survey_index.append({
-                    "file_name":    rec.get("file_name", ""),
-                    "file_id":      rec.get("file_id", ""),
-                    "mime_type":    rec.get("mime_type", ""),
-                    "local_path":   rec.get("local_path", ""),
-                    "doc_type":     rec.get("doc_type", ""),
-                    "program":      rec.get("program", ""),
-                    "district":     rec.get("district", ""),
-                    "academic_year": rec.get("academic_year", ""),
-                    "drive_url":    rec.get("drive_url", ""),
+                    "file_name":  rec.get("file_name", ""),
+                    "file_id":    rec.get("file_id", ""),
+                    "mime_type":  rec.get("mime_type", ""),
+                    "local_path": rec.get("local_path", ""),
+                    "drive_url":  rec.get("drive_url", ""),
+                    "tags":       _tags,
                 })
 
     @tool
     def list_surveys(
-        program: Optional[str] = None,
-        district: Optional[str] = None,
-        doc_type: Optional[str] = None,
+        tag_filters: Optional[dict] = None,
     ) -> str:
         """
         List available survey spreadsheet files in the corpus.
         Use this before calling survey_stats() to discover which files exist
         and find the exact file name to query.
-        Optionally filter by program, district, or doc_type.
+        tag_filters: optional dict of tag key/value pairs to filter,
+        e.g. {"program": "Ekumen Outreach"}.
         """
         if not _survey_index:
             return "No survey spreadsheets found in the corpus."
 
         results = _survey_index
-        if program:  results = [r for r in results if r.get("program")  == program]
-        if district: results = [r for r in results if r.get("district") == district]
-        if doc_type: results = [r for r in results if r.get("doc_type") == doc_type]
+        if tag_filters:
+            results = [
+                r for r in results
+                if all(r.get("tags", {}).get(k) == v for k, v in tag_filters.items() if v)
+            ]
 
         if not results:
             return "No survey files match those filters."
@@ -422,10 +413,9 @@ def make_tools(
         lines = [f"Found {len(results)} spreadsheet files:\n"]
         for r in results:
             parts = [f"**{r['file_name']}**"]
-            if r.get("program"):       parts.append(f"program={r['program']}")
-            if r.get("district"):      parts.append(f"district={r['district']}")
-            if r.get("academic_year"): parts.append(f"year={r['academic_year']}")
-            if r.get("doc_type"):      parts.append(f"type={r['doc_type']}")
+            for k, v in (r.get("tags") or {}).items():
+                if v:
+                    parts.append(f"{k}={v}")
             lines.append("- " + "  |  ".join(parts))
         return "\n".join(lines)
 
@@ -453,7 +443,7 @@ def make_tools(
         """
         from pipeline.survey_stats import survey_stats_for_file
 
-        # Find matching file â€” normalize spaces/underscores and match bidirectionally
+        # Find matching file -- normalize spaces/underscores and match bidirectionally
         def _normalize(s: str) -> str:
             return s.lower().replace("_", " ")
 
@@ -530,13 +520,12 @@ def _format_rag_result(result: dict, url_lookup: dict | None = None) -> str:
             answer = answer.replace(tag, f"({link})")
         else:
             meta = " | ".join(f"{k}={v}" for k, v in s.get("tags", {}).items())
-            trailing.append(f"  - {link}" + (f" â€” {meta}" if meta else ""))
+            trailing.append(f"  - {link}" + (f" -- {meta}" if meta else ""))
 
     if trailing:
         answer += "\n\nSources:\n" + "\n".join(trailing)
 
     return answer
-
 
 
 def _parse_json_list(val) -> list[str]:

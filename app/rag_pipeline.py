@@ -98,12 +98,9 @@ class RagPipeline:
         self,
         question: str,
         *,
-        program: str | None = None,
-        district: str | None = None,
-        academic_year: str | None = None,
-        doc_type: str | None = None,
-        theme_cluster: str | None = None,
-        history: list[dict] | None = None,
+        tag_filters: "dict[str, str | None] | None" = None,
+        theme_cluster: "str | None" = None,
+        history: "list[dict] | None" = None,
     ) -> dict:
         """
         Run a full RAG query.
@@ -114,13 +111,13 @@ class RagPipeline:
             "sources": [
               {
                 "n", "file_name", "drive_url",
-                "program", "district", "academic_year", "doc_type",
+              "file_name", "drive_url", "section", "text", <any tag keys>
                 "section", "text"
               }, ...
             ]
           }
         """
-        where  = _build_where(program, district, academic_year, doc_type, theme_cluster)
+        where  = _build_where(tag_filters, theme_cluster)
         chunks = self._retrieve(question, where)
 
         if not chunks:
@@ -141,15 +138,20 @@ class RagPipeline:
 
         sources = [
             {
-                "n":            c["n"],
-                "file_name":    c["meta"].get("file_name", ""),
-                "drive_url":    c["meta"].get("drive_url", ""),
-                "program":      c["meta"].get("program", ""),
-                "district":     c["meta"].get("district", ""),
-                "academic_year":c["meta"].get("academic_year", ""),
-                "doc_type":     c["meta"].get("doc_type", ""),
-                "section":      _section_label(c["meta"]),
-                "text":         c["text"],
+                "n":        c["n"],
+                "file_name":c["meta"].get("file_name", ""),
+                "drive_url":c["meta"].get("drive_url", ""),
+                "section":  _section_label(c["meta"]),
+                "text":     c["text"],
+                **{
+                    k: c["meta"].get(k, "")
+                    for k in c["meta"]
+                    if k not in {
+                        "file_id", "file_name", "drive_url", "folder_path",
+                        "section_h1", "section_h2", "section_h3",
+                        "chunk_index", "chunk_count",
+                    }
+                },
             }
             for c in chunks
         ]
@@ -231,24 +233,18 @@ class RagPipeline:
 # ------------------------------------------------------------------
 
 def _build_where(
-    program: str | None,
-    district: str | None,
-    academic_year: str | None,
-    doc_type: str | None,
-    theme_cluster: str | None,
-) -> dict | None:
-    conditions = []
-    if program:       conditions.append({"program":       {"$eq":       program}})
-    if district:      conditions.append({"district":      {"$eq":       district}})
-    if academic_year: conditions.append({"academic_year": {"$eq":       academic_year}})
-    if doc_type:      conditions.append({"doc_type":      {"$eq":       doc_type}})
-    if theme_cluster: conditions.append({"theme_clusters":{"$contains": theme_cluster}})
-
+    tag_filters: "dict[str, str | None] | None",
+    theme_cluster: "str | None",
+) -> "dict | None":
+    conditions: list[dict] = []
+    for key, val in (tag_filters or {}).items():
+        if val:
+            conditions.append({key: {"$eq": val}})
+    if theme_cluster:
+        conditions.append({"theme_clusters": {"$contains": theme_cluster}})
     if not conditions:
         return None
-    if len(conditions) == 1:
-        return conditions[0]
-    return {"$and": conditions}
+    return conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
 
 def _is_theme_question(question: str) -> bool:

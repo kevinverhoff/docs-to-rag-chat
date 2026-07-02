@@ -121,10 +121,7 @@ class Agent:
         question: str,
         *,
         history: list[dict] | None = None,
-        program: str | None = None,
-        district: str | None = None,
-        academic_year: str | None = None,
-        doc_type: str | None = None,
+        tag_filters: "dict[str, str | None] | None" = None,
         theme_cluster: str | None = None,
     ) -> dict:
         """
@@ -134,12 +131,13 @@ class Agent:
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
         messages.extend(_history_to_messages(history))
 
-        filter_lines = []
-        if program:       filter_lines.append(f"Program: {program}")
-        if district:      filter_lines.append(f"District: {district}")
-        if academic_year: filter_lines.append(f"Year: {academic_year}")
-        if doc_type:      filter_lines.append(f"Doc type: {doc_type}")
-        if theme_cluster: filter_lines.append(f"Theme cluster: {theme_cluster}")
+        filter_lines = [
+            f"{k.replace('_', ' ').title()}: {v}"
+            for k, v in (tag_filters or {}).items()
+            if v
+        ]
+        if theme_cluster:
+            filter_lines.append(f"Theme cluster: {theme_cluster}")
 
         user_text = question
         if filter_lines:
@@ -208,31 +206,33 @@ def _history_to_messages(history: list[dict] | None) -> list:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Chat with the document agent.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  python agent.py "What challenges have the Ekumen worlds reported?"
-  python agent.py "How has mobile training uptake changed over time?" --program "Ekumen Outreach"
-  python agent.py "What themes appear in Gethen?" --district Gethen
-  python agent.py "Compare Ansible Studies implementation across worlds" --doc-type site_visit
+  python agent.py "What are the key findings from the Hainish worlds?"
+  python agent.py "Summarize document themes" --filter "program=Ekumen Outreach"
+  python agent.py "What appears in the Gethen reports?" --filter "district=Gethen"
+  python agent.py "Compare site visits" --filter "doc_type=site_visit" --filter "program=Ansible Studies"
 """,
     )
     parser.add_argument("question")
-    parser.add_argument("--program",       default=None)
-    parser.add_argument("--district",      default=None)
-    parser.add_argument("--year",          default=None, dest="academic_year")
-    parser.add_argument("--doc-type",      default=None, dest="doc_type")
+    parser.add_argument(
+        "--filter", action="append", default=[], metavar="KEY=VALUE",
+        help="Tag filter, e.g. --filter 'program=Ekumen Outreach'",
+    )
     parser.add_argument("--theme-cluster", default=None, dest="theme_cluster")
     args = parser.parse_args()
 
     pipeline = RagPipeline()
     ag = Agent(pipeline)
 
+    tag_filters = {}
+    for f in args.filter:
+        if "=" in f:
+            k, v = f.split("=", 1)
+            tag_filters[k.strip()] = v.strip().strip("'\"")
+
     result = ag.chat(
         args.question,
-        program=args.program,
-        district=args.district,
-        academic_year=args.academic_year,
-        doc_type=args.doc_type,
+        tag_filters=tag_filters or None,
         theme_cluster=args.theme_cluster,
     )
     print(result["answer"])

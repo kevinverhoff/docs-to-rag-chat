@@ -7,6 +7,7 @@ Run with:
 
 import json
 import re
+import sys as _sys
 from collections import Counter
 from pathlib import Path
 import base64
@@ -14,6 +15,9 @@ import base64
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+
+_sys.path.insert(0, str(Path(__file__).parent.parent))
+import config as _config
 
 from feedback import feedback_form
 
@@ -102,6 +106,17 @@ def get_themes() -> pd.DataFrame | None:
     df = pd.read_parquet(THEMES_PATH)
     if "theme_extraction_status" in df.columns:
         df = df[df["theme_extraction_status"] == "ok"]
+    # Expand tags JSON into individual columns for sidebar filtering and browsing
+    if "tags" in df.columns:
+        try:
+            tags_expanded = df["tags"].apply(
+                lambda v: json.loads(v) if isinstance(v, str) else (v or {})
+            ).apply(pd.Series)
+            for col in tags_expanded.columns:
+                if col not in df.columns:
+                    df[col] = tags_expanded[col]
+        except Exception:
+            pass
     return df if not df.empty else None
 
 
@@ -177,32 +192,22 @@ def sidebar(themes_df: pd.DataFrame | None) -> dict:
             unsafe_allow_html=True,
         )
 
-        def _fmt_doc_type(v: str) -> str:
-            return v if v == "(All)" else v.replace("_", " ").title()
-
-        st.markdown(
-            "<div class='sidebar-field-label' style='margin:0 0 8px 0;'>Program</div>",
-            unsafe_allow_html=True,
-        )
-        program = st.selectbox("", ["(All)"] + _distinct(themes_df, "program"), key="program", label_visibility="collapsed")
-
-        st.markdown(
-            "<div class='sidebar-field-label' style='margin:14px 0 8px 0;'>District</div>",
-            unsafe_allow_html=True,
-        )
-        district = st.selectbox("", ["(All)"] + _distinct(themes_df, "district"), key="district", label_visibility="collapsed")
-
-        st.markdown(
-            "<div class='sidebar-field-label' style='margin:14px 0 8px 0;'>Academic Year</div>",
-            unsafe_allow_html=True,
-        )
-        academic_year = st.selectbox("", ["(All)"] + _distinct(themes_df, "academic_year"), key="academic_year", label_visibility="collapsed")
-
-        st.markdown(
-            "<div class='sidebar-field-label' style='margin:14px 0 8px 0;'>Doc Type</div>",
-            unsafe_allow_html=True,
-        )
-        doc_type = st.selectbox("", ["(All)"] + _distinct(themes_df, "doc_type"), format_func=_fmt_doc_type, key="doc_type", label_visibility="collapsed")
+        filter_vals: dict[str, str | None] = {}
+        for i, key in enumerate(_config.FILTER_TAG_KEYS):
+            label  = key.replace("_", " ").title()
+            margin = "0 0 8px 0" if i == 0 else "14px 0 8px 0"
+            st.markdown(
+                f"<div class='sidebar-field-label' style='margin:{margin};'>{label}</div>",
+                unsafe_allow_html=True,
+            )
+            options = ["(All)"] + _distinct(themes_df, key)
+            val = st.selectbox(
+                "", options,
+                format_func=lambda v: v if v == "(All)" else v.replace("_", " ").title(),
+                key=key,
+                label_visibility="collapsed",
+            )
+            filter_vals[key] = None if val == "(All)" else val
 
         st.markdown(
             "<div class='sidebar-field-label' style='margin:14px 0 8px 0;'>Theme Cluster</div>",
@@ -215,13 +220,7 @@ def sidebar(themes_df: pd.DataFrame | None) -> dict:
             st.session_state.pop("messages", None)
             st.rerun()
 
-    return {
-        "program":       None if program       == "(All)" else program,
-        "district":      None if district      == "(All)" else district,
-        "academic_year": None if academic_year == "(All)" else academic_year,
-        "doc_type":      None if doc_type      == "(All)" else doc_type,
-        "theme_cluster": None if theme_cluster == "(All)" else theme_cluster,
-    }
+    return {**filter_vals, "theme_cluster": None if theme_cluster == "(All)" else theme_cluster}
 
 
 # ------------------------------------------------------------------
@@ -286,18 +285,18 @@ def _extract_trace(messages: list) -> tuple:
 def _render_debug(trace: list[dict], usage: dict = None) -> None:
     if not trace:
         return
-    label = f"\U0001f50d Agent trace — {len(trace)} tool call(s)"
+    label = f"\U0001f50d Agent trace -- {len(trace)} tool call(s)"
     if usage and (usage.get("input_tokens") or usage.get("output_tokens")):
-        label += f"  ·  {usage['input_tokens']:,} in / {usage['output_tokens']:,} out tokens"
+        label += f"  .  {usage['input_tokens']:,} in / {usage['output_tokens']:,} out tokens"
     with st.expander(label, expanded=False):
         for i, step in enumerate(trace, 1):
-            st.markdown(f"**Step {i} · `{step['tool']}`**")
+            st.markdown(f"**Step {i} . `{step['tool']}`**")
             if step["args"]:
                 st.markdown("*Arguments*")
                 st.json(step["args"])
             result_text = step["result"]
             if result_text:
-                truncated = result_text if len(result_text) <= 1500 else result_text[:1500] + "\n…[truncated]"
+                truncated = result_text if len(result_text) <= 1500 else result_text[:1500] + "\n...[truncated]"
                 st.markdown("*Tool output*")
                 st.code(truncated, language="text")
             if i < len(trace):
@@ -313,7 +312,7 @@ def _filter_label(filters: dict) -> str:
         f"{k.replace('_', ' ').title()}: **{v}**"
         for k, v in filters.items() if v
     ]
-    return " · ".join(parts) if parts else "No filters active — searching all documents."
+    return " | ".join(parts) if parts else "No filters active -- searching all documents."
 
 
 def chat_tab(ag, filters: dict) -> None:
@@ -324,33 +323,33 @@ def chat_tab(ag, filters: dict) -> None:
         st.session_state.messages = []
 
     # Layout order determines visual position:
-    #   msg_container  → messages (grows upward as history accumulates)
-    #   warning_slot   → filter-change banner (sits just above the chat input)
-    #   chat_input     → sticky at bottom of viewport
+    #   msg_container  -> messages (grows upward as history accumulates)
+    #   warning_slot   -> filter-change banner (sits just above the chat input)
+    #   chat_input     -> sticky at bottom of viewport
     msg_container = st.container()
     warning_slot  = st.container()
     prompt = st.chat_input("Ask a question...")
 
-    # Fill warning slot — renders just above the chat input, visible without scrolling
+    # Fill warning slot -- renders just above the chat input, visible without scrolling
     _active = st.session_state.get("active_filters")
     if _active and _active != filters and st.session_state.messages:
         changes = []
-        for _k in ("program", "district", "academic_year", "doc_type", "theme_cluster"):
+        for _k in list(_config.FILTER_TAG_KEYS) + ["theme_cluster"]:
             _old, _new = _active.get(_k), filters.get(_k)
             if _old != _new:
                 changes.append(
                     f"{_k.replace('_', ' ').title()}: "
-                    f"**{_old or 'All'}** → **{_new or 'All'}**"
+                    f"**{_old or 'All'}** -> **{_new or 'All'}**"
                 )
         with warning_slot.container(border=True):
             _c1, _c2 = st.columns([5, 1])
             with _c1:
                 st.warning(
                     "**Filters changed mid-conversation.** "
-                    "Previous responses used a different scope — the history may no longer "
+                    "Previous responses used a different scope -- the history may no longer "
                     "match your current question. Consider starting a fresh conversation.\n\n"
-                    + "  ·  ".join(changes),
-                    icon="⚠️",
+                    + "  .  ".join(changes),
+                    icon="warning",
                 )
             with _c2:
                 st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -387,10 +386,11 @@ def chat_tab(ag, filters: dict) -> None:
                         {"role": m["role"], "content": m["content"]}
                         for m in st.session_state.messages[:-1]
                     ]
+                    _tag_filters = {k: v for k, v in filters.items() if k != "theme_cluster" and v}
                     result = ag.chat(
                         prompt,
                         history=history,
-                        filters=filters.get("filters"),
+                        tag_filters=_tag_filters or None,
                         theme_cluster=filters.get("theme_cluster"),
                     )
 
@@ -417,12 +417,8 @@ def chat_tab(ag, filters: dict) -> None:
 # ------------------------------------------------------------------
 
 def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
-    for col, val in [
-        ("program",       filters.get("program")),
-        ("district",      filters.get("district")),
-        ("academic_year", filters.get("academic_year")),
-        ("doc_type",      filters.get("doc_type")),
-    ]:
+    for col in _config.FILTER_TAG_KEYS:
+        val = filters.get(col)
         if val and col in df.columns:
             df = df[df[col] == val]
 
@@ -464,9 +460,10 @@ def browse_tab(themes_df: pd.DataFrame | None, filters: dict) -> None:
 
     col1, col2 = st.columns([3, 1])
     with col1:
+        group_options = list(_config.FILTER_TAG_KEYS) or ["program", "academic_year", "district", "doc_type"]
         group_col = st.selectbox(
             "Group by",
-            ["program", "academic_year", "district", "doc_type"],
+            group_options,
             key="browse_group",
         )
     with col2:
@@ -483,7 +480,7 @@ def browse_tab(themes_df: pd.DataFrame | None, filters: dict) -> None:
         except Exception:
             return ""
 
-    _group_vals = df["tags"].apply(_get_tag) if "tags" in df.columns else pd.Series([""] * len(df))
+    _group_vals = df["tags"].apply(_get_tag) if "tags" in df.columns else df.get(group_col, pd.Series([""] * len(df)))
     groups = sorted(
         df.groupby(_group_vals.where(_group_vals != "", other=None).dropna(), dropna=True),
         key=lambda x: str(x[0]),
@@ -498,9 +495,9 @@ def browse_tab(themes_df: pd.DataFrame | None, filters: dict) -> None:
             all_themes.extend(_parse_list(row.get("themes")))
         top_themes = [t for t, _ in Counter(all_themes).most_common(6)]
 
-        with st.expander(f"**{name}** — {len(group)} documents"):
+        with st.expander(f"**{name}** -- {len(group)} documents"):
             if top_themes:
-                st.markdown("**Top themes:** " + "  ·  ".join(top_themes))
+                st.markdown("**Top themes:** " + "  .  ".join(top_themes))
                 st.divider()
 
             for _, row in group.iterrows():
@@ -513,7 +510,7 @@ def browse_tab(themes_df: pd.DataFrame | None, filters: dict) -> None:
                 header = f"[{fname}]({url})" if url else fname
                 st.markdown(f"**{header}**")
                 if clusters:
-                    st.caption("Clusters: " + " · ".join(clusters))
+                    st.caption("Clusters: " + " . " .join(clusters))
                 if themes:
                     st.markdown("Themes: " + ", ".join(themes))
                 if findings:
@@ -531,21 +528,21 @@ def _inject_fonts() -> None:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Teachers:ital,wght@0,400..900;1,400..900&display=swap');
 
-        /* Body — Nunito */
+        /* Body -- Nunito */
         html, body, [class*="stMarkdown"], p, li, td, th, label,
         .stChatMessage, .stTextInput, .stSelectbox, .stCaption,
         div[data-testid="stChatMessageContent"] {
             font-family: 'Nunito', sans-serif !important;
         }
 
-        /* Primary headings — Teachers */
+        /* Primary headings -- Teachers */
         h1, h2,
         [class*="stMarkdown"] h1,
         [class*="stMarkdown"] h2 {
             font-family: 'Teachers', sans-serif !important;
         }
 
-        /* Sub-headings / condensed — Bebas Neue */
+        /* Sub-headings / condensed -- Bebas Neue */
         h3, h4, h5, h6,
         [class*="stMarkdown"] h3,
         [class*="stMarkdown"] h4,
@@ -632,14 +629,14 @@ def main() -> None:
     st.markdown(
         """
         <div style='margin-bottom:16px;'>
-          <div style='margin:0;color:#24265b;font-size:2rem;font-weight:700;letter-spacing:-0.02em;'>🤖 Your Personal Research Assistant</div>
+          <div style='margin:0;color:#24265b;font-size:2rem;font-weight:700;letter-spacing:-0.02em;'>Your Personal Research Assistant</div>
           <div style='margin:4px 0 0 0;color:#5C628F;font-size:1rem;line-height:1.4;'>Search across the document library.</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    chat_t, browse_t = st.tabs(["💬 Chat", "📊 Browse Themes"])
+    chat_t, browse_t = st.tabs(["Chat", "Browse Themes"])
 
     with chat_t:
         if ag is not None:

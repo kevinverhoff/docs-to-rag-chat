@@ -99,6 +99,7 @@ def main(override: bool = False, keep_raw: bool = False, stream: bool = False) -
                 )
             source  = LocalFolderSource(Path(_config.LOCAL_DOCS_DIR))
             records = source.fetch_documents(DATA_DIR)
+            METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
             METADATA_PATH.write_text(
                 json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8"
             )

@@ -1,10 +1,11 @@
 ﻿import importlib
 import pytest
 
-
 def _reload(monkeypatch, **env):
     for k, v in env.items():
         monkeypatch.setenv(k, v)
+    import dotenv
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **kw: None)
     import config
     importlib.reload(config)
     return config

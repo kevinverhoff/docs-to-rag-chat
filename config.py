@@ -34,7 +34,7 @@ _EMBED_PROVIDER_DEFAULTS: dict[str, str] = {
 }
 _EMBED_MODEL_DEFAULTS: dict[str, str] = {
     "openai": "text-embedding-3-small",
-    "google": "models/text-embedding-004",
+    "google": "gemini-embedding-2-preview",
     "ollama": "nomic-embed-text",
 }
 

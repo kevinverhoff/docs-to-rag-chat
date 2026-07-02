@@ -162,6 +162,31 @@ Tags become filterable dimensions in the sidebar and searchable in the agent.
 
 Set `SOURCE_TYPE=gdrive`. The pipeline downloads all files from the Shared Drive and parses metadata from folder paths. The folder depth → tag mapping follows the same logic as local source, with the parsed field names stored as tags.
 
+#### `tags_config.yaml` (Google Drive only)
+
+When using `SOURCE_TYPE=gdrive`, folder names are mapped to tag values using `tags_config.yaml` at the project root. **This is the first file to edit when forking** — it maps your Drive folder naming conventions to clean, filterable tags.
+
+```yaml
+# Map raw Drive folder names to a clean "program" tag value
+program_map:
+  "Raw Folder Name": "Clean Tag Value"
+  "Another Folder":  "Another Program"
+
+# Known values for the "district" tag (used for LLM inference when absent from the path)
+known_districts:
+  - "District A"
+  - "District B"
+
+# Sidebar filter keys — controls which tags appear as filter dropdowns in the UI
+filter_keys:
+  - program
+  - district
+  - academic_year
+  - doc_type
+```
+
+For `SOURCE_TYPE=local`, this file is not used — tags come entirely from `FOLDER_METADATA_LEVELS` in `.env`.
+
 ---
 
 ## Build the knowledge base
@@ -243,6 +268,9 @@ All values are read from `secrets/.env`. See `.env.example` for the full annotat
 | `SHARED_DRIVE_ID` | _(empty)_ | Google Shared Drive ID (gdrive only) |
 | `CHROMA_COLLECTION` | `docs` | ChromaDB collection name |
 
+
+Org-specific tag mappings for the Google Drive source are configured in `tags_config.yaml` (see below).
+
 ---
 
 ## How the agent tools work
@@ -279,6 +307,7 @@ docs-to-rag-chat/
 ├── README.md
 ├── requirements.txt
 ├── config.py                              Central env var config
+├── tags_config.yaml                       (gdrive) folder-name → tag-value mapping; edit this first when forking
 ├── providers.py                           LLM + embedding factory functions
 ├── .env.example                           Template for secrets/.env
 ├── secrets/                               Gitignored — credentials and .env live here
@@ -356,5 +385,6 @@ pyarrow>=14.0.0
 
 # Config / UI
 python-dotenv>=1.0.0
+pyyaml>=6.0
 streamlit>=1.35.0
 ```

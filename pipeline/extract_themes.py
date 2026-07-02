@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3.5: Theme Extractor
 
 Reads documents.parquet, calls gpt-4o-mini once per document to extract:
@@ -17,34 +17,40 @@ Usage:
 """
 
 import json
+import sys
 import time
 import traceback
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+from providers import build_chat_model
+from config import GDRIVE_KNOWN_DISTRICTS
+
+
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents.parquet"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "themes_raw.parquet"
 
-MODEL = "gpt-4o-mini"
-MAX_CHARS = 30_000   # truncate very long docs; gpt-4o-mini has 128k context
+MAX_CHARS = 30_000   # truncate very long docs
 MIN_CHARS = 100      # skip docs with too little text to extract themes from
 REQUEST_DELAY = 0.1  # seconds between API calls
 
-KNOWN_DISTRICTS = [
-    "Lake", "Lee", "Osceola", "Pasco", "Polk",
-    "St. Lucie", "Hillsborough", "Miami-Dade", "Broward",
-]
+KNOWN_DISTRICTS: list[str] = GDRIVE_KNOWN_DISTRICTS
 
 # Columns carried through from documents.parquet into themes_raw.parquet.
 # Excludes `text` and `headings` (large, not needed downstream from themes).
 CARRY_COLS = [
     "file_id", "file_name", "mime_type", "folder_path", "local_path", "drive_url",
-    "program", "doc_type", "academic_year", "season", "date_precision", "district",
+    "tags",   # replaces individual program/doc_type/academic_year/season/date_precision/district
     "char_count", "extraction_status",
 ]
 
@@ -81,7 +87,7 @@ def _build_user_prompt(text: str, needs_date: bool, needs_district: bool) -> str
     if needs_district:
         districts = ", ".join(f'"{d}"' for d in KNOWN_DISTRICTS)
         extra_fields += f"""
-{n}. inferred_district (string or null): The Florida school district this
+{n}. inferred_district (string or null): The Hainish world this
    document appears to be about. Choose from: {districts}.
    Return null if the document spans multiple districts or gives no indication.
 """
@@ -106,18 +112,17 @@ DOCUMENT:
 {body}{truncation_note}"""
 
 
-def _call_with_retry(client: OpenAI, messages: list[dict], retries: int = 3) -> dict:
+def _call_with_retry(llm: BaseChatModel, messages: list[dict], retries: int = 3) -> dict:
+    lc_messages = [
+        SystemMessage(content=m["content"]) if m["role"] == "system"
+        else HumanMessage(content=m["content"])
+        for m in messages
+    ]
     for attempt in range(retries):
         try:
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.1,
-            )
-            return json.loads(response.choices[0].message.content)
+            response = llm.invoke(lc_messages)
+            return json.loads(response.content)
         except Exception as e:
-            # Quota exhaustion won't recover -- bail immediately
             if getattr(e, "code", None) == "insufficient_quota":
                 raise
             if attempt < retries - 1:
@@ -126,7 +131,7 @@ def _call_with_retry(client: OpenAI, messages: list[dict], retries: int = 3) -> 
             raise
 
 
-def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]:
+def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | None]:
     """
     Returns (fields_dict, status, error_message).
     status is "ok", "skipped", or "error".
@@ -136,8 +141,12 @@ def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]
     if record.get("extraction_status") != "ok" or len(text.strip()) < MIN_CHARS:
         return {}, "skipped", "Insufficient text"
 
-    needs_date     = record.get("date_precision") == "unknown"
-    needs_district = not record.get("district")
+    try:
+        existing_tags: dict = json.loads(record.get("tags") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        existing_tags = {}
+    needs_date     = existing_tags.get("date_precision") == "unknown"
+    needs_district = bool(KNOWN_DISTRICTS) and not existing_tags.get("district")
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -145,7 +154,7 @@ def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]
     ]
 
     try:
-        result = _call_with_retry(client, messages)
+        result = _call_with_retry(llm, messages)
     except Exception:
         return {}, "error", traceback.format_exc(limit=3)
 
@@ -155,7 +164,7 @@ def extract_themes(client: OpenAI, record: dict) -> tuple[dict, str, str | None]
         "notable_quotes": json.dumps(result.get("notable_quotes", []), ensure_ascii=False),
         "inferred_academic_year": result.get("inferred_academic_year") if needs_date     else None,
         "inferred_season":        result.get("inferred_season")        if needs_date     else None,
-        "inferred_district":      result.get("inferred_district")      if needs_district else None,
+        
     }
     return fields, "ok", None
 
@@ -181,13 +190,13 @@ def main() -> None:
     to_process = df[~df["file_id"].isin(already_done)]
     print(f"Extracting themes from {len(to_process)} documents...")
 
-    client = OpenAI()
+    llm = build_chat_model()
     rows = []
     counts: dict[str, int] = {"ok": 0, "skipped": 0, "error": 0}
 
     for idx, (_, record) in enumerate(to_process.iterrows(), 1):
         rec = record.to_dict()
-        fields, status, error = extract_themes(client, rec)
+        fields, status, error = extract_themes(llm, rec)
 
         fname = rec.get("file_name", "")[:60]
         if status == "ok":
@@ -212,13 +221,19 @@ def main() -> None:
         counts[status] = counts.get(status, 0) + 1
 
         row = {col: rec.get(col) for col in CARRY_COLS}
+        if fields.get("inferred_district"):
+            try:
+                row_tags = json.loads(row.get("tags") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                row_tags = {}
+            row_tags["district"] = fields["inferred_district"]
+            row["tags"] = json.dumps(row_tags, ensure_ascii=False)
         row.update({
             "themes":                  fields.get("themes", "[]"),
             "key_findings":            fields.get("key_findings", "[]"),
             "notable_quotes":          fields.get("notable_quotes", "[]"),
             "inferred_academic_year":  fields.get("inferred_academic_year"),
             "inferred_season":         fields.get("inferred_season"),
-            "inferred_district":       fields.get("inferred_district"),
             "theme_extraction_status": status,
             "theme_extraction_error":  error,
         })

@@ -1,0 +1,57 @@
+﻿# tags_config.yaml
+# Customize this file for your document library. It controls how metadata is
+# inferred from Google Drive folder paths and which filters appear in the app.
+#
+# For LOCAL files (SOURCE_TYPE=local), see FOLDER_METADATA_LEVELS in .env --
+# that setting maps folder depth to tag key without any values here.
+
+# Maps lowercase GDrive top-level folder names to display names.
+# The matched folder becomes the value of the "program" tag.
+program_map:
+  "!_multiple programs": "Multiple Programs"
+  "0_ekumen outreach": "Ekumen Outreach"
+  "1_ansible studies": "Ansible Studies"
+  "2_hainish mathematics": "Hainish Mathematics"
+  "3_mobile training": "Mobile Training"
+  "4_odonian method": "Odonian Method"
+  "4_odonian": "Odonian Method"
+  "5_ansible initiative": "Ansible Initiative"
+  "6_ekumen council": "Ekumen Council"
+  "background": "Background"
+
+# Substring list for inferring the "district" tag from folder paths and file names.
+# Delete this section entirely if your documents are not organized by region.
+known_districts:
+  - "rocannon's world"
+  - "gethen"
+  - "anarres"
+  - "urras"
+  - "athshe"
+  - "werel"
+  - "yeowe"
+  - "seggri"
+  - "aka"
+  - "davenant"
+  - "chiffewar"
+  - "hain"
+  - "terra"
+  - "karhide"
+  - "orgoreyn"
+  - "abbenay"
+  - "a-io"
+  - "ekumen central"
+
+# Display-name overrides for district values where .title() gives wrong results.
+district_display:
+  "rocannon's world": "Rocannon's World"
+  "a-io": "A-Io"
+  "ekumen central": "Ekumen Central"
+
+# Tag keys that appear as filter dropdowns in the app sidebar.
+# Values are populated from the actual data -- keys with no matching documents
+# are silently omitted. Remove or reorder to customize the sidebar.
+filter_keys:
+  - program
+  - district
+  - academic_year
+  - doc_type

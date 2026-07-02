@@ -8,7 +8,10 @@ openai>=1.30.0
 
 # LangChain / LangGraph (agent -- Step 8)
 langchain>=0.2.0
-langchain-openai>=0.1.0
+langchain-openai>=0.2.0
+langchain-anthropic>=0.3.0
+langchain-google-genai>=2.0.0
+langchain-ollama>=0.2.0
 langgraph>=0.1.0
 
 # Vector store
@@ -27,6 +30,7 @@ pyarrow>=14.0.0
 
 # Config / UI
 python-dotenv>=1.0.0
+pyyaml>=6.0
 streamlit>=1.35.0
 
 # Feedback / Google Sheets

@@ -1,5 +1,5 @@
-"""
-Pipeline orchestrator -- Steps 2 through 6 (including Step 2.5: doc_type overrides).
+﻿"""
+Pipeline orchestrator -- Steps 2 through 6.
 
 Runs each step in sequence. Each step is skipped if its output already exists.
 
@@ -28,14 +28,17 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-PROJECT_ROOT   = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import config as _config
 DATA_DIR       = PROJECT_ROOT / "data" / "raw"
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents.parquet"
 METADATA_PATH  = PROJECT_ROOT / "data" / "metadata.json"
 THEMES_RAW     = PROJECT_ROOT / "data" / "themes_raw.parquet"
 THEMES         = PROJECT_ROOT / "data" / "themes.parquet"
 CHROMA_DIR     = PROJECT_ROOT / "data" / "chroma_db"
-OVERRIDES_PATH = PROJECT_ROOT / "config" / "doc_type_overrides.json"
 
 
 def _has_raw_files() -> bool:
@@ -82,9 +85,33 @@ def main(override: bool = False, keep_raw: bool = False, stream: bool = False) -
         print()
 
     # ------------------------------------------------------------------
-    # Steps 2-3 (streaming): download + extract without saving raw files
+    # Steps 2-3: Fetch documents and extract text
     # ------------------------------------------------------------------
-    if stream and not DOCUMENTS_PATH.exists():
+    if _config.SOURCE_TYPE == "local":
+        if METADATA_PATH.exists() and not override:
+            print("[skip] Step 2  -- metadata.json already exists")
+        else:
+            print("=== Step 2: Indexing local document folder ===")
+            from pipeline.sources.local import LocalFolderSource
+            if not _config.LOCAL_DOCS_DIR:
+                raise EnvironmentError(
+                    "LOCAL_DOCS_DIR must be set in .env when SOURCE_TYPE=local"
+                )
+            source  = LocalFolderSource(Path(_config.LOCAL_DOCS_DIR))
+            records = source.fetch_documents(DATA_DIR)
+            METADATA_PATH.write_text(
+                json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            print(f"  Indexed {len(records)} files from {_config.LOCAL_DOCS_DIR}")
+
+        if DOCUMENTS_PATH.exists():
+            print("[skip] Step 3  -- documents.parquet already exists")
+        else:
+            print("=== Step 3: Extracting text ===")
+            from ingest import main as run_ingest
+            run_ingest()
+
+    elif stream and not DOCUMENTS_PATH.exists():
         print("=== Steps 2-3 (stream): downloading and extracting without data/raw/ ===")
         drive_id = os.getenv("SHARED_DRIVE_ID")
         if not drive_id:
@@ -130,18 +157,6 @@ def main(override: bool = False, keep_raw: bool = False, stream: bool = False) -
             print("=== Step 3: Extracting text ===")
             from ingest import main as run_ingest
             run_ingest()
-
-    # ------------------------------------------------------------------
-    # Step 2.5: Compile doc_type overrides from audit exceptions
-    # ------------------------------------------------------------------
-    if not METADATA_PATH.exists():
-        print(f"[skip] Step 2.5 -- metadata.json not yet available")
-    elif OVERRIDES_PATH.exists() and not override:
-        print(f"[skip] Step 2.5 -- doc_type_overrides.json already exists")
-    else:
-        print("=== Step 2.5: Compiling doc_type overrides ===")
-        from build_overrides import main as run_build_overrides
-        run_build_overrides()
 
     # ------------------------------------------------------------------
     # Step 3.5: LLM theme extraction (one call per document)

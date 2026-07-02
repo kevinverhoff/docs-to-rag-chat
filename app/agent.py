@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 8: ReAct agent for document library.
 
 Uses a custom LangGraph graph that forces tool_choice="required" on the first
@@ -11,18 +11,18 @@ Usage:
   from rag_pipeline import RagPipeline
   pipeline = RagPipeline()
   ag = Agent(pipeline)
-  result = ag.chat("What challenges have districts reported?")
+  result = ag.chat("What challenges have the Ekumen worlds reported?")
   print(result["answer"])
 """
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Annotated, TypedDict
 
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.errors import GraphRecursionError
@@ -32,12 +32,15 @@ from rag_pipeline import RagPipeline
 from tools import make_tools
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+from providers import build_chat_model
 
 THEMES_PATH   = PROJECT_ROOT / "data" / "themes.parquet"
 METADATA_PATH = PROJECT_ROOT / "data" / "metadata.json"
-CHAT_MODEL    = "gpt-4o-mini"
-TEMPERATURE = 0.1
 
 SYSTEM_PROMPT = (PROJECT_ROOT / "prompts" / "agent_system_prompt.txt").read_text(encoding="utf-8")
 
@@ -50,7 +53,7 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-def _build_graph(model: ChatOpenAI, tools: list):
+def _build_graph(model, tools: list):
     """
     ReAct graph with forced tool use on the first step.
     - First model call: tool_choice="required" -- cannot skip tools
@@ -109,7 +112,7 @@ class Agent:
                 metadata = _json.load(f)
 
         tools        = make_tools(pipeline, themes_df, metadata)
-        model        = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
+        model        = build_chat_model()
         self._model  = model
         self.app     = _build_graph(model, tools)
 
@@ -118,10 +121,7 @@ class Agent:
         question: str,
         *,
         history: list[dict] | None = None,
-        program: str | None = None,
-        district: str | None = None,
-        academic_year: str | None = None,
-        doc_type: str | None = None,
+        tag_filters: "dict[str, str | None] | None" = None,
         theme_cluster: str | None = None,
     ) -> dict:
         """
@@ -131,12 +131,13 @@ class Agent:
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
         messages.extend(_history_to_messages(history))
 
-        filter_lines = []
-        if program:       filter_lines.append(f"Program: {program}")
-        if district:      filter_lines.append(f"District: {district}")
-        if academic_year: filter_lines.append(f"Year: {academic_year}")
-        if doc_type:      filter_lines.append(f"Doc type: {doc_type}")
-        if theme_cluster: filter_lines.append(f"Theme cluster: {theme_cluster}")
+        filter_lines = [
+            f"{k.replace('_', ' ').title()}: {v}"
+            for k, v in (tag_filters or {}).items()
+            if v
+        ]
+        if theme_cluster:
+            filter_lines.append(f"Theme cluster: {theme_cluster}")
 
         user_text = question
         if filter_lines:
@@ -177,7 +178,7 @@ class Agent:
             "You ran out of steps before finishing your research. "
             "Summarize the information you gathered so far into a helpful partial response. "
             "Be clear about what you found and what you didn't get to explore. "
-            "End with a short note — something like: "
+            "End with a short note â€” something like: "
             "'This is a partial response. To go deeper, try asking a more specific "
             "follow-up question (e.g., about a single program, district, or document type).'"
         )
@@ -205,31 +206,33 @@ def _history_to_messages(history: list[dict] | None) -> list:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Chat with the document agent.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  python agent.py "What coaching challenges have districts reported?"
-  python agent.py "How has teacher buy-in changed over time?" --program SWS
-  python agent.py "What themes appear in Lake district?" --district Lake
-  python agent.py "Compare Focus K-3 implementation across districts" --doc-type site_visit
+  python agent.py "What are the key findings from the Hainish worlds?"
+  python agent.py "Summarize document themes" --filter "program=Ekumen Outreach"
+  python agent.py "What appears in the Gethen reports?" --filter "district=Gethen"
+  python agent.py "Compare site visits" --filter "doc_type=site_visit" --filter "program=Ansible Studies"
 """,
     )
     parser.add_argument("question")
-    parser.add_argument("--program",       default=None)
-    parser.add_argument("--district",      default=None)
-    parser.add_argument("--year",          default=None, dest="academic_year")
-    parser.add_argument("--doc-type",      default=None, dest="doc_type")
+    parser.add_argument(
+        "--filter", action="append", default=[], metavar="KEY=VALUE",
+        help="Tag filter, e.g. --filter 'program=Ekumen Outreach'",
+    )
     parser.add_argument("--theme-cluster", default=None, dest="theme_cluster")
     args = parser.parse_args()
 
     pipeline = RagPipeline()
     ag = Agent(pipeline)
 
+    tag_filters = {}
+    for f in args.filter:
+        if "=" in f:
+            k, v = f.split("=", 1)
+            tag_filters[k.strip()] = v.strip().strip("'\"")
+
     result = ag.chat(
         args.question,
-        program=args.program,
-        district=args.district,
-        academic_year=args.academic_year,
-        doc_type=args.doc_type,
+        tag_filters=tag_filters or None,
         theme_cluster=args.theme_cluster,
     )
     print(result["answer"])

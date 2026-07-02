@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 2: Document Fetcher
 
 Downloads every file from the Shared Drive and writes:
@@ -6,14 +6,14 @@ Downloads every file from the Shared Drive and writes:
   - metadata.json              one record per file with structured metadata
 
 Metadata fields parsed from folder paths:
-  program         Top-level program area (SWS, Focus K-3, etc.)
+  program         Top-level program area (Ekumen Outreach, Ansible Studies, etc.)
   doc_type        Document category (site_visit, survey_reflection, etc.)
   academic_year   e.g. "2025-26" -- derived using the July boundary rule:
                     month >= 7  ->  [year]-[year+1]
                     month < 7   ->  [year-1]-[year]
   season          "Fall" (Jul-Dec) or "Spring" (Jan-Jun), null if unknown
   date_precision  "direct" | "month_derived" | "unknown"
-  district        Lake, Lee, Osceola, Pasco, Polk, St. Lucie, etc.
+  district        Gethen, Anarres, Urras, Werel, Hain, etc.
 
 Usage:
   python pipeline/get_docs.py
@@ -33,6 +33,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent))
+import config as _config
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -46,44 +50,17 @@ PROJECT_ROOT = Path(__file__).parent.parent
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 METADATA_PATH = PROJECT_ROOT / "data" / "metadata.json"
-OVERRIDES_PATH = PROJECT_ROOT / "config" / "doc_type_overrides.json"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 DOWNLOAD_DELAY_SECONDS = 0.1
 
 # ---------------------------------------------------------------------------
-# Program mapping -- keyed on lowercase folder name
+# Program mapping + district names -- loaded from tags_config.yaml via config
 # ---------------------------------------------------------------------------
 
-PROGRAM_MAP: dict[str, str] = {
-    "!_multiple programs": "Multiple Programs",
-    "0_sws": "SWS",
-    "1_focus k-3": "Focus K-3",
-    "2_math materials": "Math Materials",
-    "3_teacher workforce": "Teacher Workforce",
-    "4_eir/game based learning": "EIR/GBL",
-    "4_eir": "EIR/GBL",
-    "5_spark": "SPARK",
-    "6_nat hqim/policy & advocacy": "NAT HQIM",
-    "6_nat hqim": "NAT HQIM",
-    "background": "Background",
-}
-
-# ---------------------------------------------------------------------------
-# District names -- lowercase for substring matching against path + filename
-# Ordered longest-first so "palm beach" matches before "palm"
-# ---------------------------------------------------------------------------
-
-KNOWN_DISTRICTS: list[str] = [
-    "miami-dade", "st. lucie", "palm beach", "santa rosa",
-    "hillsborough", "okaloosa", "alachua", "broward", "osceola",
-    "flagler", "collier", "marion", "nassau", "putnam",
-    "pasco", "lake", "levy", "clay", "polk", "lee",
-]
-
-# Canonical display names keyed on the lowercase match string above
+PROGRAM_MAP:      dict[str, str] = _config.GDRIVE_PROGRAM_MAP
+KNOWN_DISTRICTS:  list[str]      = _config.GDRIVE_KNOWN_DISTRICTS
 DISTRICT_DISPLAY: dict[str, str] = {d: d.title() for d in KNOWN_DISTRICTS}
-DISTRICT_DISPLAY["miami-dade"] = "Miami-Dade"
-DISTRICT_DISPLAY["st. lucie"] = "St. Lucie"
+DISTRICT_DISPLAY.update(_config.GDRIVE_DISTRICT_DISPLAY)
 
 # ---------------------------------------------------------------------------
 # Month name to number
@@ -427,7 +404,7 @@ def parse_path_metadata(folder_path: str, file_name: str = "") -> dict:
     from a Drive folder path and file name.
 
     District and date signals are scanned from both the folder path components
-    and the file name so that files like "Lee County_Project Thrive - June 2026.pdf"
+    and the file name so that files like "Gethen_Initiative_Report - June 2026.pdf"
     are correctly tagged even when the folder path has no district marker.
     """
     parts = [p.strip() for p in folder_path.split("/") if p.strip()]
@@ -518,18 +495,15 @@ def download_file(
         return False, str(e)
 
 # ---------------------------------------------------------------------------
-# Main
+# Main fetch logic (used by main() and GoogleDriveSource)
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    drive_id = os.getenv("SHARED_DRIVE_ID")
-    if not drive_id:
-        raise EnvironmentError("SHARED_DRIVE_ID is not set in .env")
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    print("Connecting to Google Drive...")
-    service = build_drive_service()
+def fetch_all_documents(service, drive_id: str, dest_dir: Path) -> list[dict]:
+    """
+    Walk the Shared Drive, download all files into dest_dir, and return
+    a list of metadata dicts (same structure as metadata.json records).
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
     print("Fetching file list...")
     all_items = list_all_items(service, drive_id)
@@ -544,7 +518,7 @@ def main() -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     for idx, file in enumerate(files, 1):
-        file_id = file["id"]
+        file_id   = file["id"]
         file_name = file["name"]
         mime_type = file["mimeType"]
 
@@ -552,15 +526,14 @@ def main() -> None:
             counts["skipped"] += 1
             continue
 
-        parents = file.get("parents", [])
-        parent_id = parents[0] if parents else drive_id
+        parents     = file.get("parents", [])
+        parent_id   = parents[0] if parents else drive_id
         folder_path = path_map.get(parent_id, "")
+        parsed      = parse_path_metadata(folder_path, file_name)
 
-        parsed = parse_path_metadata(folder_path, file_name)
-
-        ext = _file_extension(mime_type, file_name)
-        local_path = DATA_DIR / f"{file_id}{ext}"
-        rel_path = str(local_path.relative_to(PROJECT_ROOT))
+        ext        = _file_extension(mime_type, file_name)
+        local_path = dest_dir / f"{file_id}{ext}"
+        rel_path   = str(local_path.relative_to(PROJECT_ROOT))
 
         if local_path.exists():
             status, error_msg = "exists", None
@@ -578,44 +551,45 @@ def main() -> None:
             time.sleep(DOWNLOAD_DELAY_SECONDS)
 
         metadata.append({
-            "file_id": file_id,
-            "file_name": file_name,
-            "mime_type": mime_type,
-            "folder_path": folder_path,
-            "local_path": rel_path,
-            "drive_url": file.get("webViewLink", ""),
+            "file_id":         file_id,
+            "file_name":       file_name,
+            "mime_type":       mime_type,
+            "folder_path":     folder_path,
+            "local_path":      rel_path,
+            "drive_url":       file.get("webViewLink", ""),
             **parsed,
             "download_status": status,
-            "error_message": error_msg,
-            "downloaded_at": now,
+            "error_message":   error_msg,
+            "downloaded_at":   now,
         })
 
-    # Apply manual doc_type overrides from audit
-    if OVERRIDES_PATH.exists():
-        with open(OVERRIDES_PATH, encoding="utf-8") as f:
-            overrides: dict[str, dict] = json.load(f)
-        override_count = 0
-        for record in metadata:
-            if record["file_id"] in overrides:
-                record["doc_type"] = overrides[record["file_id"]]["doc_type"]
-                override_count += 1
-        print(f"  Applied {override_count} doc_type overrides")
-
-    # Derive file_type from mime_type; data_form is null until
-    # extract_themes.py populates it via LLM inference
     for record in metadata:
         record["file_type"] = FILE_TYPE_MAP.get(record.get("mime_type", ""), "other")
         record["data_form"] = None
 
-    METADATA_PATH.write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-
-    print(f"\nDone.")
-    print(f"  Downloaded:    {counts['downloaded']}")
+    print(f"\n  Downloaded:    {counts['downloaded']}")
     print(f"  Already exist: {counts['exists']}")
     print(f"  Skipped:       {counts['skipped']}")
     print(f"  Failed:        {counts['failed']}")
+    return metadata
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    drive_id = os.getenv("SHARED_DRIVE_ID")
+    if not drive_id:
+        raise EnvironmentError("SHARED_DRIVE_ID is not set in .env")
+
+    print("Connecting to Google Drive...")
+    service  = build_drive_service()
+    metadata = fetch_all_documents(service, drive_id, DATA_DIR)
+
+    METADATA_PATH.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     print(f"  Metadata:      {METADATA_PATH}")
 
 
@@ -661,11 +635,6 @@ def stream_docs(service, drive_id: str):
 
     Metadata fields match what main() writes to metadata.json.
     """
-    overrides: dict[str, dict] = {}
-    if OVERRIDES_PATH.exists():
-        with open(OVERRIDES_PATH, encoding="utf-8") as f:
-            overrides = json.load(f)
-
     print("Connecting to Google Drive...")
     print("Fetching file list...")
     all_items = list_all_items(service, drive_id)
@@ -691,9 +660,6 @@ def stream_docs(service, drive_id: str):
         parent_id   = parents[0] if parents else drive_id
         folder_path = path_map.get(parent_id, "")
         parsed      = parse_path_metadata(folder_path, file_name)
-
-        if file_id in overrides:
-            parsed["doc_type"] = overrides[file_id]["doc_type"]
 
         ext = _file_extension(mime_type, file_name)
         record = {

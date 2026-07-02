@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3: Text Extractor
 
 Reads metadata.json, extracts text from every downloaded file, and writes
@@ -39,6 +39,12 @@ logging.getLogger("pdfminer").setLevel(logging.ERROR)
 PROJECT_ROOT = Path(__file__).parent.parent
 METADATA_PATH = PROJECT_ROOT / "data" / "metadata.json"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "documents.parquet"
+
+# Fields that are NOT tags -- they are structural/identity fields
+_SYSTEM_FIELDS = frozenset({
+    "file_id", "file_name", "mime_type", "folder_path",
+    "local_path", "drive_url", "download_status",
+})
 
 # File extensions that cannot yield useful text
 SKIP_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mp3", ".zip", ".bin"}
@@ -286,18 +292,23 @@ def main() -> None:
 
         counts[status] = counts.get(status, 0) + 1
 
+        _tags = {
+            k: v for k, v in record.items()
+            if k not in _SYSTEM_FIELDS and v is not None and str(v).strip()
+        }
         rows.append({
-            **{k: record.get(k) for k in (
-                "file_id", "file_name", "mime_type", "folder_path",
-                "local_path", "drive_url",
-                "program", "doc_type", "academic_year", "season",
-                "date_precision", "district",
-            )},
-            "text": text,
-            "headings": json.dumps(headings, ensure_ascii=False),
-            "char_count": len(text),
+            "file_id":           record.get("file_id"),
+            "file_name":         record.get("file_name"),
+            "mime_type":         record.get("mime_type"),
+            "folder_path":       record.get("folder_path"),
+            "local_path":        record.get("local_path"),
+            "drive_url":         record.get("drive_url"),
+            "tags":              json.dumps(_tags, ensure_ascii=False),
+            "text":              text,
+            "headings":          json.dumps(headings, ensure_ascii=False),
+            "char_count":        len(text),
             "extraction_status": status,
-            "extraction_error": error,
+            "extraction_error":  error,
         })
 
     df = pd.DataFrame(rows)
@@ -374,13 +385,18 @@ def process_stream(
                 print(f"    {error.splitlines()[0]}")
 
         counts[status] = counts.get(status, 0) + 1
+        _tags = {
+            k: v for k, v in record.items()
+            if k not in _SYSTEM_FIELDS and v is not None and str(v).strip()
+        }
         rows.append({
-            **{k: record.get(k) for k in (
-                "file_id", "file_name", "mime_type", "folder_path",
-                "local_path", "drive_url",
-                "program", "doc_type", "academic_year", "season",
-                "date_precision", "district",
-            )},
+            "file_id":           record.get("file_id"),
+            "file_name":         record.get("file_name"),
+            "mime_type":         record.get("mime_type"),
+            "folder_path":       record.get("folder_path"),
+            "local_path":        record.get("local_path"),
+            "drive_url":         record.get("drive_url"),
+            "tags":              json.dumps(_tags, ensure_ascii=False),
             "text":              text,
             "headings":          json.dumps(headings, ensure_ascii=False),
             "char_count":        len(text),

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 7: RAG Pipeline
 
 RagPipeline wraps Chroma + OpenAI into a single cached object.
@@ -9,8 +9,8 @@ Usage:
   from rag_pipeline import RagPipeline
   pipeline = RagPipeline()
   result = pipeline.answer(
-      "What are the main challenges in SWS implementation?",
-      program="SWS", district="Lake",
+      "What are the main challenges in Ekumen Outreach implementation?",
+      program="Ekumen Outreach", district="Gethen",
   )
   print(result["answer"])
   for src in result["sources"]:
@@ -18,22 +18,26 @@ Usage:
 """
 
 import json
+import sys
 from pathlib import Path
 
 import chromadb
 import pandas as pd
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+
+import config as _config
+from providers import build_chat_model, build_embedder
 
 CHROMA_PATH = PROJECT_ROOT / "data" / "chroma_db"
 THEMES_PATH = PROJECT_ROOT / "data" / "themes.parquet"
-COLLECTION  = "docs"
-EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL  = "gpt-4o-mini"
-TEMPERATURE = 0.1
+COLLECTION  = _config.CHROMA_COLLECTION
 
 TOP_K       = 20  # over-fetch before dedup
 MAX_PER_DOC = 2   # max chunks from the same document
@@ -51,6 +55,11 @@ THEME_KEYWORDS = {
 SYSTEM_PROMPT = (PROJECT_ROOT / "prompts" / "rag_pipeline_system_prompt.txt").read_text(encoding="utf-8")
 
 
+def _to_lc_messages(messages: list[dict]) -> list:
+    _MAP = {"system": SystemMessage, "user": HumanMessage, "assistant": AIMessage}
+    return [_MAP[m["role"]](content=m["content"]) for m in messages]
+
+
 class RagPipeline:
     """
     Owns the Chroma and OpenAI connections. Designed to be initialized once
@@ -62,7 +71,8 @@ class RagPipeline:
         chroma_path: Path = CHROMA_PATH,
         themes_path: Path = THEMES_PATH,
     ) -> None:
-        self.openai = OpenAI()
+        self._embedder = build_embedder()
+        self._llm      = build_chat_model()
 
         chroma = chromadb.PersistentClient(path=str(chroma_path))
         try:
@@ -88,12 +98,9 @@ class RagPipeline:
         self,
         question: str,
         *,
-        program: str | None = None,
-        district: str | None = None,
-        academic_year: str | None = None,
-        doc_type: str | None = None,
-        theme_cluster: str | None = None,
-        history: list[dict] | None = None,
+        tag_filters: "dict[str, str | None] | None" = None,
+        theme_cluster: "str | None" = None,
+        history: "list[dict] | None" = None,
     ) -> dict:
         """
         Run a full RAG query.
@@ -104,13 +111,13 @@ class RagPipeline:
             "sources": [
               {
                 "n", "file_name", "drive_url",
-                "program", "district", "academic_year", "doc_type",
+              "file_name", "drive_url", "section", "text", <any tag keys>
                 "section", "text"
               }, ...
             ]
           }
         """
-        where  = _build_where(program, district, academic_year, doc_type, theme_cluster)
+        where  = _build_where(tag_filters, theme_cluster)
         chunks = self._retrieve(question, where)
 
         if not chunks:
@@ -126,24 +133,25 @@ class RagPipeline:
 
         messages = _build_messages(question, chunks, theme_ctx, history)
 
-        response = self.openai.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=messages,
-            temperature=TEMPERATURE,
-        )
-        answer_text = response.choices[0].message.content.strip()
+        response    = self._llm.invoke(_to_lc_messages(messages))
+        answer_text = response.content.strip()
 
         sources = [
             {
-                "n":            c["n"],
-                "file_name":    c["meta"].get("file_name", ""),
-                "drive_url":    c["meta"].get("drive_url", ""),
-                "program":      c["meta"].get("program", ""),
-                "district":     c["meta"].get("district", ""),
-                "academic_year":c["meta"].get("academic_year", ""),
-                "doc_type":     c["meta"].get("doc_type", ""),
-                "section":      _section_label(c["meta"]),
-                "text":         c["text"],
+                "n":        c["n"],
+                "file_name":c["meta"].get("file_name", ""),
+                "drive_url":c["meta"].get("drive_url", ""),
+                "section":  _section_label(c["meta"]),
+                "text":     c["text"],
+                **{
+                    k: c["meta"].get(k, "")
+                    for k in c["meta"]
+                    if k not in {
+                        "file_id", "file_name", "drive_url", "folder_path",
+                        "section_h1", "section_h2", "section_h3",
+                        "chunk_index", "chunk_count",
+                    }
+                },
             }
             for c in chunks
         ]
@@ -156,8 +164,7 @@ class RagPipeline:
 
     def _retrieve(self, question: str, where: dict | None) -> list[dict]:
         """Embed the question, query Chroma, dedupe to MAX_PER_DOC per doc."""
-        emb = self.openai.embeddings.create(model=EMBED_MODEL, input=[question])
-        query_vec = emb.data[0].embedding
+        query_vec = self._embedder.embed_query(question)
 
         try:
             results = self.collection.query(
@@ -226,24 +233,18 @@ class RagPipeline:
 # ------------------------------------------------------------------
 
 def _build_where(
-    program: str | None,
-    district: str | None,
-    academic_year: str | None,
-    doc_type: str | None,
-    theme_cluster: str | None,
-) -> dict | None:
-    conditions = []
-    if program:       conditions.append({"program":       {"$eq":       program}})
-    if district:      conditions.append({"district":      {"$eq":       district}})
-    if academic_year: conditions.append({"academic_year": {"$eq":       academic_year}})
-    if doc_type:      conditions.append({"doc_type":      {"$eq":       doc_type}})
-    if theme_cluster: conditions.append({"theme_clusters":{"$contains": theme_cluster}})
-
+    tag_filters: "dict[str, str | None] | None",
+    theme_cluster: "str | None",
+) -> "dict | None":
+    conditions: list[dict] = []
+    for key, val in (tag_filters or {}).items():
+        if val:
+            conditions.append({key: {"$eq": val}})
+    if theme_cluster:
+        conditions.append({"theme_clusters": {"$contains": theme_cluster}})
     if not conditions:
         return None
-    if len(conditions) == 1:
-        return conditions[0]
-    return {"$and": conditions}
+    return conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
 
 def _is_theme_question(question: str) -> bool:
@@ -309,15 +310,15 @@ if __name__ == "__main__":
         description="Ask a question against the document library.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
-  python rag_pipeline.py "What challenges have districts reported with SWS?"
-  python rag_pipeline.py "What are teachers saying?" --district Lake --program SWS
+  python rag_pipeline.py "What challenges have worlds reported with Ekumen Outreach?"
+  python rag_pipeline.py "What are mobiles saying?" --district Gethen --program "Ekumen Outreach"
   python rag_pipeline.py "How has teacher buy-in changed?" --year 2024-25 --theme-cluster "Educator Development"
 """,
     )
 
     parser.add_argument("question", help="Question to ask")
-    parser.add_argument("--program",  default=None, help="Filter by program (e.g. SWS, Focus K-3)")
-    parser.add_argument("--district", default=None, help="Filter by district (e.g. Lake, Osceola)")
+    parser.add_argument("--program",  default=None, help="Filter by program (e.g. Ekumen Outreach, Ansible Studies)")
+    parser.add_argument("--district", default=None, help="Filter by world (e.g. Gethen, Anarres)")
     parser.add_argument("--year",     default=None, help="Filter by academic year (e.g. 2024-25)")
     parser.add_argument("--doc-type", default=None, dest="doc_type", help="Filter by doc type (e.g. site_visit)")
     parser.add_argument("--theme-cluster", default=None, dest="theme_cluster",

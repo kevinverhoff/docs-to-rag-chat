@@ -8,13 +8,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).parent
-load_dotenv(PROJECT_ROOT / "secrets" / ".env")
+_env_path = PROJECT_ROOT / "secrets" / ".env"
+if not _env_path.exists():
+    _env_path = PROJECT_ROOT / ".env"
+load_dotenv(_env_path)
 
 # ------------------------------------------------------------------
 # LLM
 # ------------------------------------------------------------------
-LLM_PROVIDER    = os.getenv("LLM_PROVIDER",    "openai").lower()   # openai|anthropic|google|ollama
-LLM_MODEL       = os.getenv("LLM_MODEL",       "gpt-4o-mini")
+LLM_PROVIDER    = os.getenv("LLM_PROVIDER",    "google").lower()   # openai|anthropic|google|ollama
+LLM_MODEL       = os.getenv("LLM_MODEL",       "gemini-2.5-flash-lite")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 
 # ------------------------------------------------------------------

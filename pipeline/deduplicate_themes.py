@@ -94,7 +94,15 @@ def generate_theme_map(llm: BaseChatModel, themes: list[str]) -> dict[str, str]:
         SystemMessage(content=_MAP_SYSTEM),
         HumanMessage(content=_map_prompt(themes)),
     ])
-    mapping: dict[str, str] = json.loads(resp.content)
+    raw = (resp.content or "").strip()
+    if not raw:
+        raise ValueError(
+            "LLM returned an empty response -- possibly blocked by content safety. "
+            "Try a different model or check your provider safety settings."
+        )
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
+    mapping: dict[str, str] = json.loads(raw.strip())
     return {t: mapping.get(t, t) for t in themes}
 
 # ---------------------------------------------------------------------------
@@ -127,7 +135,15 @@ def generate_cluster_map(llm: BaseChatModel, canonical: list[str]) -> dict[str, 
         SystemMessage(content=_CLUSTER_SYSTEM),
         HumanMessage(content=_cluster_prompt(canonical)),
     ])
-    mapping: dict[str, str] = json.loads(resp.content)
+    raw = (resp.content or "").strip()
+    if not raw:
+        raise ValueError(
+            "LLM returned an empty response -- possibly blocked by content safety. "
+            "Try a different model or check your provider safety settings."
+        )
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
+    mapping: dict[str, str] = json.loads(raw.strip())
     return {t: mapping.get(t, t) for t in canonical}
 
 # ---------------------------------------------------------------------------

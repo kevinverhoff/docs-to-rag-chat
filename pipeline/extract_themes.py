@@ -121,7 +121,15 @@ def _call_with_retry(llm: BaseChatModel, messages: list[dict], retries: int = 3)
     for attempt in range(retries):
         try:
             response = llm.invoke(lc_messages)
-            return json.loads(response.content)
+            raw = (response.content or "").strip()
+            if not raw:
+                raise ValueError(
+                    "LLM returned an empty response -- possibly blocked by content safety. "
+                    "Try a different model or check your provider safety settings."
+                )
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
+            return json.loads(raw.strip())
         except Exception as e:
             if getattr(e, "code", None) == "insufficient_quota":
                 raise
@@ -138,8 +146,10 @@ def extract_themes(llm: BaseChatModel, record: dict) -> tuple[dict, str, str | N
     """
     text = record.get("text") or ""
 
-    if record.get("extraction_status") != "ok" or len(text.strip()) < MIN_CHARS:
-        return {}, "skipped", "Insufficient text"
+    if record.get("extraction_status") != "ok":
+        return {}, "skipped", f"extraction_status={record.get('extraction_status')!r}"
+    if len(text.strip()) < MIN_CHARS:
+        return {}, "skipped", f"text too short ({len(text.strip())} chars, min {MIN_CHARS})"
 
     try:
         existing_tags: dict = json.loads(record.get("tags") or "{}")
@@ -208,7 +218,7 @@ def main() -> None:
             print(f"  [{idx}/{len(to_process)}] {fname}")
             print(f"    themes: {themes_str}")
         elif status == "skipped":
-            print(f"  [{idx}/{len(to_process)}] SKIP  {fname}")
+            print(f"  [{idx}/{len(to_process)}] SKIP  {fname}  ({error})")
         elif status == "error":
             last_line = error.strip().splitlines()[-1] if error and error.strip().splitlines() else "unknown"
             print(f"  [{idx}/{len(to_process)}] ERROR  {fname}")
